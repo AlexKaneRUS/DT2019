@@ -78,34 +78,35 @@
 -- 6. Реализуйте любой (but choose wisely) алгоритм сортировки. Функцию сравнения можно принимать в качестве аргумента.
 
 \func sort {A : \Type} (l : List A) (comp : A -> A -> Bool) => sortRec' (length l) l comp
-  \where
-    \func sortRec' {A : \Type} (s : Nat) (l : List A) (comp : A -> A -> Bool) : List A \elim s
-      | 0 => nil
-      | suc s => \case l \with {
-        | nil => nil
-        | cons x nil => cons x nil
-        | l => \let (left, right) => split l \in
+  \where {
+    -- Лучше паттерн матчиться на l сразу.
+    \func sortRec' {A : \Type} (s : Nat) (l : List A) (comp : A -> A -> Bool) : List A \elim s, l
+      | 0, _ => nil
+      | suc _, nil => nil
+      | suc _, cons x nil => cons x nil
+      | suc s, l => \let (left, right) => split l \in
           merge (sortRec' s left comp) (sortRec' s right comp) comp
-      }
 
     \func split {A : \Type} (l : List A) : \Sigma (List A) (List A) =>
       \let | len => length l
            | half => div len 2
       \in divAt l half 0 nil
 
-      \where
+      \where {
         \func divAt {A : \Type} (l : List A) (stopInd : Nat) (curInd : Nat) (acc : List A) : \Sigma (List A) (List A) \elim l
           | nil => (nil, acc)
           | cons lx lxs \as l => if (stopInd == curInd) (acc, l) (divAt lxs stopInd (curInd + 1) (cons lx acc))
 
         \func length {A : \Type} (l : List A) : Nat
           | nil => 0
-          | cons _ xs => 1 + length xs
+          | cons _ xs => length xs + 1 -- Мы же обсуждали на лекции, что лучше писать l + 1, чем 1 + l.
+      }
 
     \func merge {A : \Type} (l : List A) (r : List A) (comp : A -> A -> Bool) : List A \elim l, r
       | nil, y => y
       | x, nil => x
       | cons x xs \as l, cons y ys \as r => if (comp y x) (cons x (merge xs r comp)) (cons y (merge l ys comp))
+}
 
 \func sortTest1 : sort (cons 1 (cons 2 (cons 3 nil))) (<) = cons 3 (cons 2 (cons 1 nil)) => idp
 
