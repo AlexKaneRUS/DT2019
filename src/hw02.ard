@@ -96,11 +96,11 @@
         \func divAt {A : \Type} (l : List A) (stopInd : Nat) (curInd : Nat) (acc : List A) : \Sigma (List A) (List A) \elim l
           | nil => (nil, acc)
           | cons lx lxs \as l => if (stopInd == curInd) (acc, l) (divAt lxs stopInd (curInd + 1) (cons lx acc))
-
-        \func length {A : \Type} (l : List A) : Nat
-          | nil => 0
-          | cons _ xs => length xs + 1 -- Мы же обсуждали на лекции, что лучше писать l + 1, чем 1 + l.
       }
+      
+      \func length {A : \Type} (l : List A) : Nat
+        | nil => 0
+        | cons _ xs => length xs + 1 -- Мы же обсуждали на лекции, что лучше писать l + 1, чем 1 + l.
 
     \func merge {A : \Type} (l : List A) (r : List A) (comp : A -> A -> Bool) : List A \elim l, r
       | nil, y => y
