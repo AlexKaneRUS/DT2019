@@ -19,6 +19,12 @@
 
 -- Bool
 
+\func \infixl 7 == (x y : Nat) : Bool
+  | zero, zero => true
+  | zero, _ => false
+  | suc x, suc y => x == y
+  | _, _ => false
+
 \data Bool | true | false
 
 \func not (x : Bool) : Bool

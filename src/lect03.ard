@@ -9,15 +9,6 @@
 -- Доказательство, что Unit верно.
 \func Unit-proof : Unit => unit
 
--- Пустой тип соответствует ложному утверждению.
-\data Empty
-
--- Доказательство, что из Empty следует что угодно.
-\func absurd {A : \Type} (e : Empty) : A
-
-\func absurd' {A : \Type} (e : Empty) : A \elim e
-  | () -- абсурдный образец
-
 -- \Sigma-тип эквивалентен очевидно определению пар.
 -- \Sigma Nat Nat === \data Pair | pair Nat Nat
 {- Haskell:

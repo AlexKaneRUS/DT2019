@@ -1,4 +1,6 @@
 \import Utils
+\import lect02 (*, +, -, if)
+\import lect03 (T, Unit)
 \import lect04
 
 -- 1. Напишите функцию lookup, которая принимает List A и натуральное число и возвращает элемент по заданому индексу.
@@ -11,83 +13,340 @@
   | suc x, 0 => false
   | suc x, suc y => x < y
 
-\func lookup => {?}
+\func trans< {a b c : Nat} (p : T (a < b)) (p' : T (b < c)) : T (a < c)
+  \elim a, b, c
+    | _, 0, 0 => absurd p'
+    | _, suc _, 0 => absurd p'
+    | 0, 0, _ => absurd p
+    | suc _, 0, _ => absurd p
+    | 0, suc b, suc c => Unit.unit
+    | suc a, suc b, suc c => trans< {a} {b} {c} p p'
+
+\func obvious {M : Nat}: T (M < suc M)
+\elim M
+  | 0 => Unit.unit
+  | suc M => obvious {M}
+
+\func length {A : \Type} (l : List A) : Nat \elim l
+  | nil => 0
+  | cons x xs => suc (length xs)
+
+\func lookup {A : \Type} (l : List A) (i : Nat) (p : T (i < length l)) : A \elim l, i
+  | cons x xs, 0 => x
+  | cons x xs, suc n => lookup xs n p
+  | nil, 0 => absurd p
+  | nil, suc _ => absurd p
 
 -- 2. Реализуйте аналоги функции replicate для vec и Vec (эта функция создает список заданной длины, состоящий из повторений данного элемента).
 
+\func replicateVec {A : \Type} (n : Nat) (a : A) : Vec A n \elim n
+  | 0 => fnil
+  | suc x => fcons a (replicateVec x a)
+
+\func replicatevec {A : \Type} (n : Nat) (a : A) : vec A n \elim n
+  | 0 => ()
+  | suc x => (a, replicatevec x a)
+
 -- 3. Реализуйте аналоги функции map для vec и Vec.
+
+\func mapVec {A : \Type} {B : \Type} {n : Nat} (f : A -> B) (la : Vec A n) : Vec B n \elim n, la
+  | 0, fnil => fnil
+  | suc _, fcons x xs => fcons (f x) (mapVec f xs)
+
+\func mapvec {A : \Type} {B : \Type} {n : Nat} (f : A -> B) (la : vec A n) : vec B n \elim n, la
+  | 0, () => ()
+  | suc _, (x, xs) => (f x, mapvec f xs)
 
 -- 4. Реализуйте аналоги функции zipWith для vec и Vec.
 --    Функция должна принимать вектора одинаковой длины.
+
+\func zipWithVec {A : \Type} {B : \Type} {C : \Type} {n : Nat} (f : A -> B -> C) (la : Vec A n) (lb : Vec B n) : Vec C n \elim n, la, lb
+  | 0, fnil, fnil => fnil
+  | suc _, fcons x xs, fcons y ys => fcons (f x y) (zipWithVec f xs ys)
+
+\func zipWithvec {A : \Type} {B : \Type} {C : \Type} {n : Nat} (f : A -> B -> C) (la : vec A n) (lb : vec B n) : vec C n \elim n, la, lb
+  | 0, (), () => ()
+  | suc _, (x, xs), (y, ys) => (f x y, zipWithvec f xs ys)
 
 -- 5. Функции Fin n → A соответствуют спискам элементов A длины n.
 --    Функция, преобразующая Vec A n в Fin n → A, была реализована на лекции.
 --    Реализуйте обратную функцию.
 
-\func coin {A : \Type} {n : Nat} (f : Fin n -> A) : Vec A n => {?}
+\func coin {A : \Type} {n : Nat} (f : Fin n -> A) : Vec A n \elim n
+  | 0 => fnil
+  | suc x => fcons (f fzero) (coin {A} {x} (down f))
+  \where {
+    \func down {A : \Type} {n : Nat} (f : Fin (suc n) -> A) (fin : Fin n) : A => f (fsuc fin)
+  }
+
+\func test : (coin (toNat {3}) = (fcons 0 (fcons 1 (fcons 2 fnil)))) => idp
 
 -- 6. Определите тип матриц и ряд функций над ними.
 
-\func Mat (A : \Type) (n m : Nat) : \Type => {?}
+\func Mat (A : \Type) (n m : Nat) : \Type => Vec (Vec A m) n
 
 -- диагональная матрица с элементами e на диагонали и z на остальных позициях.
 
-\func diag {A : \Type} (z e : A) (n : Nat) : Mat A n n => {?}
+\func empty {A : \Type} (z : A) (n : Nat) (m : Nat) : Mat A n m => replicateVec n (replicateVec m z)
+
+\func diag {A : \Type} (z e : A) (n : Nat) : Mat A n n => helper (empty z n n) e n
+  \where {
+    \func helper {A : \Type} {n : Nat} (mat : Mat A n n) (e : A) (m : Nat) : Mat A n n \elim m
+      | 0 => set mat 0 0 e
+      | suc x => set (helper mat e x) (n - suc x) (n - suc x) e
+  }
+
+\func testDiag : (diag 0 1 3 = fcons (fcons 1 (fcons 0 (fcons 0 fnil)))
+                        (fcons (fcons 0 (fcons 1 (fcons 0 fnil)))
+                               (fcons (fcons 0 (fcons 0 (fcons 1 fnil))) fnil))) => idp
 
 -- транспонирование матриц
 
-\func transpose {A : \Type} {n m : Nat} (M : Mat A n m) : Mat A m n => {?}
+\func set {A : \Type} {n : Nat} {m : Nat} (mat : Mat A n m) (i : Nat) (j : Nat) (val : A) : Mat A n m => setHelper n mat i j val
+  \where {
+    \func setHelper {A : \Type} {n : Nat} {m : Nat} (N : Nat) (mat : Mat A n m) (i : Nat) (j : Nat) (val : A) : Mat A n m \elim n, mat
+      | 0, fnil => fnil
+      | suc n, fcons x xs => \case (i == (N - suc n)) \with {
+        | true => fcons (setHelper' m x j val) xs
+        | false => fcons x (setHelper N xs i j val)
+      }
+
+    \func setHelper' {A : \Type} {n : Nat} (N : Nat) (vec : Vec A n) (i : Nat) (val : A) : Vec A n \elim n, vec
+      | 0, fnil => fnil
+      | suc n, fcons x xs => \case (i == (N - suc n)) \with {
+        | true => fcons val xs
+        | false => fcons x (setHelper' N xs i val)
+      }
+  }
+
+\func testSet : (set (empty 0 2 2) 1 1 10 = fcons (fcons 0 (fcons 0 fnil)) (fcons (fcons 0 (fcons 10 fnil)) fnil)) => idp
+
+\func lookupVec {A : \Type} {n : Nat} (v : Vec A n) (i : Nat) (p : T (i < n)) : A \elim n, v, i
+  | suc _, fcons x xs, 0 => x
+  | suc _, fcons x xs, suc n => lookupVec xs n p
+  | 0, fnil, 0 => absurd p
+  | 0, fnil, suc _ => absurd p
+
+\func get {A : \Type} {n : Nat} {m : Nat} (mat : Mat A n m) (i : Nat) (pi : T (i < n)) (j : Nat) (pj : T (j < m)) : A
+  => lookupVec (lookupVec mat i pi) j pj
+
+\func proofLess {i n : Nat} (p : T (suc i < n)) : T (i < n)
+  \elim i, n
+    | 0, 0 => absurd p
+    | 0, suc 0 => absurd p
+    | 0, suc n => Unit.unit
+    | suc i, suc n => proofLess p
+    | suc i, 0 => absurd p
+
+\func proofSub {M m : Nat} (p : T (suc m < M)) : T (M - suc m < M)
+  \elim M, m
+    | 0, 0 => absurd p
+    | 0, suc _ => absurd p
+    | suc (suc x), 0 => obvious
+    | suc 0, 0 => Unit.unit
+    | suc M, suc m => trans< (proofSub p) obvious
+
+\func transpose {A : \Type} {n m : Nat} (M : Mat A n m) : Mat A m n
+  => helperOuter n m M
+  \where {
+    \func helperOuter {A : \Type} (N M : Nat) (matOld : Mat A N M) : Mat A M N
+      \elim N, M
+        | 0, 0 => fnil
+        | suc n, 0 => fnil
+        | 0, suc n => replicateVec (suc n) fnil
+        | suc n, suc m =>
+          helper (suc n) n (suc m) (obvious {n}) matOld
+                 (helper'' {A} {suc n} {suc m} {0} {suc m} Unit.unit matOld
+                           (empty (get matOld 0 Unit.unit 0 Unit.unit) (suc m) (suc n)))
+
+    \func helper {A : \Type} (N : Nat) (n M : Nat) (p : T (n < N)) (matOld : Mat A N M) (mat : Mat A M N) : Mat A M N
+      \elim n
+        | 0 => mat
+        | suc n => helper N n M (proofLess p) matOld (helper'' {A} {N} {M} {N - suc n} {M} (proofSub p) matOld mat)
+
+    \func helper'' {A : \Type} {N M n m : Nat} (pi : T (n < N)) (matOld : Mat A N M) (mat : Mat A M N) : Mat A M N
+      \elim M
+        | 0 => mat
+        | suc m => helper' {A} {N} {suc m} {n} {m} pi (obvious {m}) matOld (set mat 0 n (get matOld n pi 0 Unit.unit))
+
+    \func helper' {A : \Type} {N M n m : Nat} (pi : T (n < N)) (pj : T (m < M)) (matOld : Mat A N M) (mat : Mat A M N) : Mat A M N
+      \elim m
+        | 0 => mat
+        | suc m => helper' pi (proofLess pj) matOld (set mat (M - suc m) n (get matOld n pi (M - suc m) (proofSub pj)))
+  }
+
+\func testTranspose : (transpose (fcons (fcons 1 (fcons 2 (fcons 3 fnil)))
+                                        (fcons (fcons 4 (fcons 5 (fcons 6 fnil)))
+                                               (fcons (fcons 7 (fcons 8 (fcons 9 fnil))) fnil))) = (fcons (fcons 1 (fcons 4 (fcons 7 fnil)))
+                                                                                                          (fcons (fcons 2 (fcons 5 (fcons 8 fnil)))
+                                                                                                                 (fcons (fcons 3 (fcons 6 (fcons 9 fnil))) fnil))))
+  => idp
 
 -- сложение матриц
 
-\func matAdd {A : \Type} (add : A -> A -> A) (n m : Nat) (M N : Mat A n m) : Mat A n m => {?}
+\func matAdd {A : \Type} (add : A -> A -> A) (n m : Nat) (M N : Mat A n m) : Mat A n m
+  => helperOuter n m add M N
+  \where {
+    \func helperOuter {A : \Type} (N M : Nat) (f : A -> A -> A) (matOld matOld' : Mat A N M) : Mat A N M
+    \elim N, M
+      | 0, 0 => fnil
+      | suc n, 0 => replicateVec (suc n) fnil
+      | 0, suc n => fnil
+      | suc n, suc m =>
+        helper (suc n) n (suc m) f (obvious {n}) matOld matOld'
+               (helper'' {A} {suc n} {suc m} {0} {suc m} f Unit.unit matOld matOld'
+                         (empty (get matOld 0 Unit.unit 0 Unit.unit) (suc n) (suc m)))
+
+    \func helper {A : \Type} (N : Nat) (n M : Nat) (f : A -> A -> A) (p : T (n < N)) (matOld matOld' : Mat A N M) (mat : Mat A N M) : Mat A N M
+    \elim n
+      | 0 => mat
+      | suc n => helper N n M f (proofLess p) matOld matOld' (helper'' {A} {N} {M} {N - suc n} {M} f (proofSub p) matOld matOld' mat)
+
+    \func helper'' {A : \Type} {N M n m : Nat} (f : A -> A -> A) (pi : T (n < N)) (matOld matOld' : Mat A N M) (mat : Mat A N M) : Mat A N M
+      \elim M
+        | 0 => mat
+        | suc m => helper' {A} {N} {suc m} {n} {m} f pi (obvious {m}) matOld matOld' (set mat n 0
+                                                                                          (f (get matOld n pi 0 Unit.unit)
+                                                                                             (get matOld' n pi 0 Unit.unit)))
+
+    \func helper' {A : \Type} {N M n m : Nat} (f : A -> A -> A) (pi : T (n < N)) (pj : T (m < M)) (matOld matOld' : Mat A N M) (mat : Mat A N M) : Mat A N M
+      \elim m
+        | 0 => mat
+        | suc m => helper' f pi (proofLess pj) matOld matOld' (set mat n (M - suc m)
+                                                                   (f (get matOld n pi (M - suc m) (proofSub pj))
+                                                                      (get matOld' n pi (M - suc m) (proofSub pj))))
+  }
+
+\func testAdd : (matAdd (+) 3 3 (fcons (fcons 1 (fcons 2 (fcons 3 fnil)))
+                                        (fcons (fcons 4 (fcons 5 (fcons 6 fnil)))
+                                               (fcons (fcons 7 (fcons 8 (fcons 9 fnil))) fnil))) (fcons (fcons 1 (fcons 4 (fcons 7 fnil)))
+                                                                                                          (fcons (fcons 2 (fcons 5 (fcons 8 fnil)))
+                                                                                                                 (fcons (fcons 3 (fcons 6 (fcons 9 fnil))) fnil))) = fcons (fcons 2 (fcons 6 (fcons 10 fnil)))
+                                                                                                                                                                           (fcons (fcons 6 (fcons 10 (fcons 14 fnil)))
+                                                                                                                                                                                  (fcons (fcons 10 (fcons 14 (fcons 18 fnil))) fnil)))
+  => idp
 
 -- умножение матриц
 
 -- z ─ нейтральный элемент по сложению.
-\func matMul {A : \Type} (z : A) (add mul : A -> A -> A) (n m k : Nat) (M : Mat A n m) (N : Mat A m k) : Mat A n k => {?}
+\func matMul {A : \Type} (z : A) (add mul : A -> A -> A) (n m k : Nat) (M : Mat A n m) (N : Mat A m k) : Mat A n k
+  => helperOuter n m k add mul z M N
+  \where {
+    \func lookupColumn {A : \Type} {N M : Nat} (mat : Mat A N M) (j : Nat) (pj : T (j < M)) : Vec A N \elim N, mat
+      | 0, fnil => fnil
+      | suc N, fcons x xs => fcons (lookupVec x j pj) (lookupColumn xs j pj)
+
+    \func foldl {A B : \Type} {N : Nat} (f : B -> A -> B) (z : B) (vec : Vec A N) : B
+      \elim N, vec
+        | 0, fnil => z
+        | suc N, fcons x xs => foldl f (f z x) xs
+
+    \func rowByColumn {A : \Type} (N M K : Nat) (z : A) (add mul : A -> A -> A)
+                      (i : Nat) (pi : T (i < N)) (j : Nat) (pj : T (j < K))
+                      (oldMat : Mat A N M) (oldMat' : Mat A M K) : A
+      => \let
+        | row => lookupVec oldMat i pi
+        | col => lookupColumn oldMat' j pj
+        \in foldl add z (zipWithVec mul row col)
+
+    \func helperOuter {A : \Type} (N M K : Nat) (add mul : A -> A -> A) (z : A) (matOld : Mat A N M) (matOld' : Mat A M K) : Mat A N K
+    \elim N, K
+      | 0, 0 => fnil
+      | suc n, 0 => replicateVec (suc n) fnil
+      | 0, suc n => fnil
+      | suc n, suc k =>
+        helper (suc n) n M (suc k) add mul z (obvious {n}) matOld matOld'
+               (helper'' {A} {suc n} {M} {suc k} {0} {suc k} add mul z Unit.unit matOld matOld'
+                         (empty z (suc n) (suc k)))
+
+    \func helper {A : \Type} (N n M K : Nat) (add mul : A -> A -> A) (z : A) (p : T (n < N)) (matOld : Mat A N M) (matOld' : Mat A M K) (mat : Mat A N K) : Mat A N K
+    \elim n
+      | 0 => mat
+      | suc n => helper N n M K add mul z (proofLess p) matOld matOld' (helper'' {A} {N} {M} {K} {N - suc n} {K} add mul z (proofSub p) matOld matOld' mat)
+
+    \func helper'' {A : \Type} {N M K n k : Nat} (add mul : A -> A -> A) (z : A) (pi : T (n < N)) (matOld : Mat A N M) (matOld' : Mat A M K) (mat : Mat A N K) : Mat A N K
+    \elim K
+      | 0 => mat
+      | suc k => helper' {A} {N} {M} {suc k} {n} {k} add mul z pi (obvious {k}) matOld matOld' (set mat n 0
+                                                                                                    (rowByColumn N M (suc k) z add mul n pi 0 Unit.unit matOld matOld'))
+
+    \func helper' {A : \Type} {N M K n k : Nat} (add mul : A -> A -> A) (z : A)
+                  (pi : T (n < N)) (pj : T (k < K)) (matOld : Mat A N M) (matOld' : Mat A M K) (mat : Mat A N K) : Mat A N K
+    \elim k
+      | 0 => mat
+      | suc k => helper' add mul z pi (proofLess pj) matOld matOld' (set mat n (K - suc k)
+                                                                         (rowByColumn N M K z add mul n pi (K - suc k) (proofSub pj) matOld matOld'))
+  }
+
+\func testMul : (matMul 0 (+) (*) 3 2 2 (fcons (fcons 1 (fcons 2 fnil))
+                                        (fcons (fcons 4 (fcons 5 fnil))
+                                        (fcons (fcons 7 (fcons 8 fnil)) fnil))) (fcons (fcons 4 (fcons 5 fnil))
+                                                                                       (fcons (fcons 7 (fcons 8 fnil)) fnil)) = (fcons (fcons 18 (fcons 21 fnil))
+                                                                                                                                (fcons (fcons 51 (fcons 60 fnil))
+                                                                                                                                (fcons (fcons 84 (fcons 99 fnil)) fnil))))
+  => idp
 
 -- 7. Определите тип CTree A n полных бинарных деревьев высоты ровно n, которые хранят элементы только во внутренних узлах, но не в листьях.
 --    Высота листа равна 0.
 
-\data CTree (A : \Type) (n : Nat)
+\data CTree (A : \Type) (n : Nat) \elim n
+  | 0 => cleaf
+  | suc n => cnode (x : A) (CTree A n) (CTree A n)
 
 -- 8. Определите тип Tree A n бинарных деревьев высоты не больше n, которые хранят элементы только во внутренних узлах, но не в листьях.
 --    Высота листа равна 0.
 
-\data Tree (A : \Type) (n : Nat)
+\data Tree (A : \Type) (n : Nat) \elim n
+  | suc n => node (x : A) (Tree A n) (Tree A n)
+  | _ => leaf
 
 -- определите функцию, возвращающую высоту дерева.
 
-\func height {A : \Type} (n : Nat) (t : Tree A n) : Fin (suc n) => {?}
+\func max {n : Nat} (x y : Fin n) : Fin n => \case toNat x < toNat y \with {
+  | false => x
+  | true => y
+}
+
+\func height {A : \Type} (n : Nat) (t : Tree A n) : Fin (suc n) \elim n, t
+  | suc x, node _ l r => fsuc (max (height x l) (height x r))
+  | _, leaf => fzero
 
 -- 9. Определите конгруэнтность для функций двух аргументов через transport.
 
-\func pmap2 {A B C : \Type} (f : A -> B -> C) {a a' : A} (p : a = a') {b b' : B} (q : b = b') : f a b = f a' b' => {?}
+\func pmap2 {A B C : \Type} (f : A -> B -> C) {a a' : A} (p : a = a') {b b' : B} (q : b = b') : f a b = f a' b'
+  => transport (\lam x => f a b = f a' x) q (transport (\lam x => f a b = f x b) p idp)
 
 -- 10. Докажите, что transport выражается через pmap и repl и наоборот.
 
 -- repl говорит, что если у нас есть два равных типа, то у нас есть функция из одного во второй.
 -- Определите repl через transport.
 
-\func repl {A B : \Type} (p : A = B) (a : A) : B => {?}
+\func id {A : \Type} (x : A) => x
+
+\func repl {A B : \Type} (p : A = B) (a : A) : B
+  => transport id p a
 
 -- Определите transport через repl и pmap.
 
-\func transport' {A : \Type} (B : A -> \Type) {a a' : A} (p : a = a') (b : B a) : B a' => {?}
+\func transport' {A : \Type} (B : A -> \Type) {a a' : A} (p : a = a') (b : B a) : B a'
+  => repl (pmap B p) b
 
 -- 11. Докажите, что если a = a' и b = b', то (a,b) = (a',b'), не используя coe.
 
-\func pairEq {A B : \Type} {a a' : A} {b b' : B} (p : a = a') (q : b = b') : (a,b) = (a',b') => {?}
+\func pairEq {A B : \Type} {a a' : A} {b b' : B} (p : a = a') (q : b = b') : (a,b) = (a',b')
+  => pmap2 (\lam x y => (x, y)) p q
 
 -- 12. Докажите, что если p = p', то p.1 = p'.1, не используя coe.
 
-\func projEq {A : \Type} (B : A -> \Type) {p p' : \Sigma (x : A) (B x)} (t : p = p') : p.1 = p'.1 => {?}
+\func projEq {A : \Type} (B : A -> \Type) {p p' : \Sigma (x : A) (B x)} (t : p = p') : p.1 = p'.1
+  => pmap (\lam x => x.1) t
 
 -- 13. Докажите, что left = right.
 
-\func left=right : left = right => {?}
+\func left=right : left = right
+  => path id
 
 -- 14. Докажите pmap2 напрямую, не используя transport.
 
-\func pmap2' {A B C : \Type} (f : A -> B -> C) {a a' : A} (p : a = a') {b b' : B} (q : b = b') : f a b = f a' b' => {?}
+\func pmap2' {A B C : \Type} (f : A -> B -> C) {a a' : A} (p : a = a') {b b' : B} (q : b = b') : f a b = f a' b'
+  => path (\lam i => f (p @ i) (q @ i))
