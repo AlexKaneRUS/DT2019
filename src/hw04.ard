@@ -185,37 +185,9 @@
 -- сложение матриц
 
 \func matAdd {A : \Type} (add : A -> A -> A) (n m : Nat) (M N : Mat A n m) : Mat A n m
-  => helperOuter n m add M N
-  \where {
-    \func helperOuter {A : \Type} (N M : Nat) (f : A -> A -> A) (matOld matOld' : Mat A N M) : Mat A N M
-    \elim N, M
-      | 0, 0 => fnil
-      | suc n, 0 => replicateVec (suc n) fnil
-      | 0, suc n => fnil
-      | suc n, suc m =>
-        helper (suc n) n (suc m) f (obvious {n}) matOld matOld'
-               (helper'' {A} {suc n} {suc m} {0} {suc m} f Unit.unit matOld matOld'
-                         (empty (get matOld 0 Unit.unit 0 Unit.unit) (suc n) (suc m)))
-
-    \func helper {A : \Type} (N : Nat) (n M : Nat) (f : A -> A -> A) (p : T (n < N)) (matOld matOld' : Mat A N M) (mat : Mat A N M) : Mat A N M
-    \elim n
-      | 0 => mat
-      | suc n => helper N n M f (proofLess p) matOld matOld' (helper'' {A} {N} {M} {N - suc n} {M} f (proofSub p) matOld matOld' mat)
-
-    \func helper'' {A : \Type} {N M n m : Nat} (f : A -> A -> A) (pi : T (n < N)) (matOld matOld' : Mat A N M) (mat : Mat A N M) : Mat A N M
-      \elim M
-        | 0 => mat
-        | suc m => helper' {A} {N} {suc m} {n} {m} f pi (obvious {m}) matOld matOld' (set mat n 0
-                                                                                          (f (get matOld n pi 0 Unit.unit)
-                                                                                             (get matOld' n pi 0 Unit.unit)))
-
-    \func helper' {A : \Type} {N M n m : Nat} (f : A -> A -> A) (pi : T (n < N)) (pj : T (m < M)) (matOld matOld' : Mat A N M) (mat : Mat A N M) : Mat A N M
-      \elim m
-        | 0 => mat
-        | suc m => helper' f pi (proofLess pj) matOld matOld' (set mat n (M - suc m)
-                                                                   (f (get matOld n pi (M - suc m) (proofSub pj))
-                                                                      (get matOld' n pi (M - suc m) (proofSub pj))))
-  }
+  \elim n, M, N
+    | 0, fnil, fnil => fnil
+    | suc n, fcons x xs, fcons y ys => fcons (zipWithVec add x y) (matAdd add n m xs ys)
 
 \func testAdd : (matAdd (+) 3 3 (fcons (fcons 1 (fcons 2 (fcons 3 fnil)))
                                         (fcons (fcons 4 (fcons 5 (fcons 6 fnil)))
@@ -230,52 +202,19 @@
 
 -- z ─ нейтральный элемент по сложению.
 \func matMul {A : \Type} (z : A) (add mul : A -> A -> A) (n m k : Nat) (M : Mat A n m) (N : Mat A m k) : Mat A n k
-  => helperOuter n m k add mul z M N
+  \elim n, M
+    | 0, fnil => fnil
+    | suc n, fcons x xs => fcons (helper z add mul x (transpose N)) (matMul z add mul n m k xs N)
   \where {
-    \func lookupColumn {A : \Type} {N M : Nat} (mat : Mat A N M) (j : Nat) (pj : T (j < M)) : Vec A N \elim N, mat
-      | 0, fnil => fnil
-      | suc N, fcons x xs => fcons (lookupVec x j pj) (lookupColumn xs j pj)
+    \func helper {A : \Type} {m k : Nat} (z : A) (add mul : A -> A -> A)  (M : Vec A m) (N : Mat A k m) : Vec A k
+      \elim k, N
+        | 0, fnil => fnil
+        | suc k, fcons x xs => fcons (foldl add z (zipWithVec mul M x)) (helper z add mul M xs)
 
     \func foldl {A B : \Type} {N : Nat} (f : B -> A -> B) (z : B) (vec : Vec A N) : B
       \elim N, vec
         | 0, fnil => z
         | suc N, fcons x xs => foldl f (f z x) xs
-
-    \func rowByColumn {A : \Type} (N M K : Nat) (z : A) (add mul : A -> A -> A)
-                      (i : Nat) (pi : T (i < N)) (j : Nat) (pj : T (j < K))
-                      (oldMat : Mat A N M) (oldMat' : Mat A M K) : A
-      => \let
-        | row => lookupVec oldMat i pi
-        | col => lookupColumn oldMat' j pj
-        \in foldl add z (zipWithVec mul row col)
-
-    \func helperOuter {A : \Type} (N M K : Nat) (add mul : A -> A -> A) (z : A) (matOld : Mat A N M) (matOld' : Mat A M K) : Mat A N K
-    \elim N, K
-      | 0, 0 => fnil
-      | suc n, 0 => replicateVec (suc n) fnil
-      | 0, suc n => fnil
-      | suc n, suc k =>
-        helper (suc n) n M (suc k) add mul z (obvious {n}) matOld matOld'
-               (helper'' {A} {suc n} {M} {suc k} {0} {suc k} add mul z Unit.unit matOld matOld'
-                         (empty z (suc n) (suc k)))
-
-    \func helper {A : \Type} (N n M K : Nat) (add mul : A -> A -> A) (z : A) (p : T (n < N)) (matOld : Mat A N M) (matOld' : Mat A M K) (mat : Mat A N K) : Mat A N K
-    \elim n
-      | 0 => mat
-      | suc n => helper N n M K add mul z (proofLess p) matOld matOld' (helper'' {A} {N} {M} {K} {N - suc n} {K} add mul z (proofSub p) matOld matOld' mat)
-
-    \func helper'' {A : \Type} {N M K n k : Nat} (add mul : A -> A -> A) (z : A) (pi : T (n < N)) (matOld : Mat A N M) (matOld' : Mat A M K) (mat : Mat A N K) : Mat A N K
-    \elim K
-      | 0 => mat
-      | suc k => helper' {A} {N} {M} {suc k} {n} {k} add mul z pi (obvious {k}) matOld matOld' (set mat n 0
-                                                                                                    (rowByColumn N M (suc k) z add mul n pi 0 Unit.unit matOld matOld'))
-
-    \func helper' {A : \Type} {N M K n k : Nat} (add mul : A -> A -> A) (z : A)
-                  (pi : T (n < N)) (pj : T (k < K)) (matOld : Mat A N M) (matOld' : Mat A M K) (mat : Mat A N K) : Mat A N K
-    \elim k
-      | 0 => mat
-      | suc k => helper' add mul z pi (proofLess pj) matOld matOld' (set mat n (K - suc k)
-                                                                         (rowByColumn N M K z add mul n pi (K - suc k) (proofSub pj) matOld matOld'))
   }
 
 \func testMul : (matMul 0 (+) (*) 3 2 2 (fcons (fcons 1 (fcons 2 fnil))
