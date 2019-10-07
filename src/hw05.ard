@@ -1,4 +1,5 @@
 \import Utils
+\import hw04 (id)
 \import lect05
 \open Nat
 
@@ -6,11 +7,16 @@
 --    Можно ли определить transport через coe0?
 --    Верно ли, что эти конструкции взаимообратны в том смысле что, если мы построим transport по coe, а потом coe0 по transport, то получим исходный (частный случай) coe? Верно ли, что они взаимообратны в обратную сторону?
 
-\func coe0 (A : I -> \Type) (a : A left) : A right => {?}
+\func coe0 (A : I -> \Type) (a : A left) : A right
+  => transport A (path id) a
+
+\func transport0 {A : \Type} (B : A -> \Type) {a a' : A} (p : a = a') (b : B a) : B a'
+  => coe0 (\lam i => B (p @ i)) b
 
 -- 2. Определите функцию B right -> B left.
 
-\func Itr' {B : I -> \Type} (b : B right) : B left => {?}
+\func Itr' {B : I -> \Type} (b : B right) : B left
+  => transport B (sym (path id)) b
 
 -- 3. Докажите, что (\lam x => not (not x)) = (\lam x => x).
 
@@ -18,11 +24,22 @@
   | true => false
   | false => true
 
-\func notNotId : (\lam x => not (not x)) = (\lam x => x) => {?}
+\func notNotId : (\lam x => not (not x)) = (\lam x => x)
+  => funExt (\lam _ => Bool) helper
+  \where {
+    \func helper (a : Bool) : (\lam x => not (not x)) a = (\lam x => x) a \elim a
+      | true => idp
+      | false => idp
+  }
 
 -- 4. Определите факториал через Nat-rec.
 
+\func fac-rec (x : Nat) : Nat => Nat-rec Nat 1 (*) x
+
 -- 5. Докажите ассоциативность сложения для натуральных чисел через Nat-elim.
+
+\func +assoc {x y z : Nat} : (x + y) + z = x + (y + z)
+  => Nat-elim (\lam z => (x + y) + z = x + (y + z)) idp (\lam _ => pmap suc) z
 
 -- 6. Определите рекурсор и элиминатор для D.
 
@@ -31,11 +48,48 @@
   | con2 D D
   | con3 (Nat -> D)
 
+\func D-rec {P : \Type}
+            (con1' : Nat -> P)
+            (con2' : P -> P -> P)
+            (con3' : (Nat -> P) -> P)
+            (x : D) : P \elim x
+  | con1 n => con1' n
+  | con2 l r => con2' (D-rec con1' con2' con3' l) (D-rec con1' con2' con3' r)
+  | con3 f => con3' (\lam x => D-rec con1' con2' con3' (f x))
+
+\func D-elim (P : D -> \Type)
+            (con1' : \Pi (n : Nat) -> P (con1 n))
+            (con2' : \Pi (l : D) -> \Pi (r : D) -> P l -> P r -> P (con2 l r))
+            (con3' : \Pi (f : Nat -> D) -> \Pi (g : \Pi (n : Nat) -> P (f n)) -> P (con3 f))
+            (x : D) : P x \elim x
+  | con1 n => con1' n
+  | con2 l r => con2' l r (D-elim P con1' con2' con3' l) (D-elim P con1' con2' con3' r)
+  | con3 f => con3' f (\lam n => D-elim P con1' con2' con3' (f n))
+
 -- 7. Определите рекурсор и элиминатор для List.
+
+\func List-rec {A P : \Type}
+            (nil' : P)
+            (cons' : A -> P -> P)
+            (x : List A) : P \elim x
+  | nil => nil'
+  | cons x xs => cons' x (List-rec nil' cons' xs)
+
+\func List-elim {A : \Type} (P : List A -> \Type)
+               (nil' : P nil)
+               (cons' : \Pi (x : A) -> \Pi (xs : List A) -> P xs -> P (cons x xs))
+               (x : List A) : P x \elim x
+  | nil => nil'
+  | cons x xs => cons' x xs (List-elim P nil' cons' xs)
 
 -- 8. Докажите, что 0 не равно suc x.
 
-\func zero/=suc (x : Nat) (p : 0 = suc x) : Empty => {?}
+\func zero/=suc (x : Nat) (p : 0 = suc x) : Empty => true/=false (transport (\lam x => true = helper x) p idp)
+  \where {
+    \func helper (x : Nat) : Bool \elim x
+      | zero => true
+      | suc x => false
+  }
 
 -- 9. Докажите, что fac не равен suc.
 
@@ -45,13 +99,56 @@
   | 0 => 1
   | suc n => suc n * fac n
 
-\func fac/=suc (p : fac = suc) : Empty => {?}
+\func fac/=suc (p : fac = suc) : Empty => zero/=suc 0 (transport (\lam x => 0 = helper x) (transport (\lam x => 1 = x 1) p idp) idp)
+  \where {
+    \func helper (x : Nat) : Nat \elim x
+      | zero => zero
+      | suc x => x
+  }
 
 -- 10. Докажите дистрибутивность умножения над сложением для натуральных чисел.
 
-\func ldistr (n m k : Nat) : n * (m + k) = n * m + n * k => {?}
+\func *-comm (n m : Nat) : n * m = m * n
+  | 0, 0 => idp
+  | 0, suc m => *-comm 0 m
+  | suc n, 0 => *-comm n 0
+  | suc n, suc m => pmap suc (
+    suc n * m + n ==< pmap (\lam x => x + n) (*-comm (suc n) m) >==
+    m * n + m + n ==< pmap (\lam x => x + m + n) (sym (*-comm n m)) >==
+    n * m + m + n ==< +-assoc (n * m) m n >==
+    n * m + (m + n) ==< +-comm (n * m) (m + n) >==
+    m + n + n * m ==< +-assoc m n (n * m) >==
+    m + (n + n * m) ==< pmap (\lam x => m + x) (+-comm n (n * m)) >==
+    m + n * suc m ==< pmap (\lam x => m + x) (*-comm n (suc m)) >==
+    m + suc m * n ==< +-comm m (suc m * n) >==
+    suc m * n + m `qed)
 
-\func rdistr (n m k : Nat) : (m + k) * n = m * n + k * n => {?}
+\func ldistr (n m k : Nat) : n * (m + k) = n * m + n * k \elim n
+  | 0 => 0 * (m + k) ==< *-comm 0 (m + k) >==
+         m * 0 + k * 0 ==< pmap (\lam x => m * 0 + x) (*-comm k 0) >==
+         m * 0 + 0 * k ==< pmap (\lam x => x + 0 * k) (*-comm m 0) >==
+         0 * m + 0 * k `qed
+  | suc n => (suc n) * (m + k) ==< *-comm (suc n) (m + k) >==
+             (m + k) * n + (m + k) ==< pmap (\lam x => x + (m + k)) (*-comm (m + k) n) >==
+             n * (m + k) + (m + k) ==< pmap (\lam x => x + (m + k)) (ldistr n m k) >==
+             n * m + n * k + (m + k) ==< +-assoc (n * m) (n * k) (m + k) >==
+             n * m + (n * k + (m + k)) ==< pmap (\lam x => n * m + (n * k + x)) (+-comm m k) >==
+             n * m + (n * k + (k + m)) ==< pmap (\lam x => n * m + x) (sym (+-assoc (n * k) k m)) >==
+             n * m + ((n * k + k) + m) ==< pmap (\lam x => n * m + ((x + k) + m)) (*-comm n k) >==
+             n * m + (k * suc n + m) ==< pmap (\lam x => n * m + x) (+-comm (k * suc n) m) >==
+             n * m + (m + k * suc n) ==< sym (+-assoc (n * m) m (k * suc n)) >==
+             n * m + m + k * suc n ==< pmap (\lam x => x + m + k * suc n) (*-comm n m) >==
+             m * suc n + k * suc n ==< pmap (\lam x => m * suc n + x) (*-comm k (suc n)) >==
+             m * suc n + suc n * k ==< pmap (\lam x => x + suc n * k) (*-comm m (suc n)) >==
+             suc n * m + suc n * k `qed
+
+
+\func rdistr (n m k : Nat) : (m + k) * n = m * n + k * n
+  => (m + k) * n ==< *-comm (m + k) n >==
+     n * (m + k) ==< ldistr n m k >==
+     n * m + n * k ==< pmap (\lam x => n * m + x) (*-comm n k) >==
+     n * m + k * n ==< pmap (\lam x => x + k * n) (*-comm n m) >==
+     m * n + k * n `qed
 
 -- 11. Докажите, что reverse (reverse xs) = xs, где reverse определен через ++.
 
@@ -65,7 +162,29 @@
   | nil => nil
   | cons x xs => reverse xs ++ cons x nil
 
--- Это утверждение будет полезно для доказательства.
-\func reverse++ {A : \Type} (xs ys : List A) : reverse (xs ++ ys) = reverse ys ++ reverse xs => {?}
+\func ++-asoc {A : \Type} (xs ys zs : List A) : xs ++ ys ++ zs = xs ++ (ys ++ zs) \elim xs
+  | nil => idp
+  | cons x xs => pmap (cons x) (++-asoc xs ys zs)
 
-\func reverse-isInvolutive {A : \Type} (xs : List A) : reverse (reverse xs) = xs => {?}
+\func ++-nil-comm {A : \Type} (xs : List A) : xs ++ nil = nil ++ xs \elim xs
+  | nil => idp
+  | cons x xs => pmap (cons x) (++-nil-comm xs)
+
+-- Это утверждение будет полезно для доказательства.
+\func reverse++ {A : \Type} (xs ys : List A) : reverse (xs ++ ys) = reverse ys ++ reverse xs \elim xs, ys
+  | nil, nil => idp
+  | nil, cons y ys => reverse ys ++ cons y nil ==< idp >==
+                      reverse ys ++ (cons y nil ++ nil) ==< sym (++-asoc (reverse ys) (cons y nil) nil) >==
+                      reverse ys ++ cons y nil ++ nil `qed
+  | cons x xs, nil => reverse (xs ++ nil) ++ cons x nil ==< pmap (\lam y => reverse y ++ cons x nil) (++-nil-comm xs) >==
+                      reverse xs ++ cons x nil `qed
+  | cons x xs, cons y ys => reverse (xs ++ cons y ys) ++ cons x nil ==< pmap (\lam z => z ++ cons x nil) (reverse++ xs (cons y ys)) >==
+                            reverse ys ++ cons y nil ++ reverse xs ++ cons x nil ==< ++-asoc (reverse ys ++ cons y nil) (reverse xs) (cons x nil) >==
+                            reverse ys ++ cons y nil ++ (reverse xs ++ cons x nil) `qed
+
+
+\func reverse-isInvolutive {A : \Type} (xs : List A) : reverse (reverse xs) = xs \elim xs
+  | nil => idp
+  | cons x xs => reverse (reverse xs ++ cons x nil) ==< reverse++ (reverse xs) (cons x nil) >==
+                 cons x (reverse (reverse xs)) ==< pmap (cons x) (reverse-isInvolutive xs) >==
+                 cons x xs `qed
