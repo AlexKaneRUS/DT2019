@@ -1,4 +1,4 @@
-\import Utils
+\import Utils \hiding (Vec)
 \import lect02 (*, +, -, if)
 \import lect03 (T, Unit)
 \import lect04
