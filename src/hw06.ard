@@ -1,17 +1,34 @@
 \import Utils
 \import lect05
+\import lect06 (J)
 
 -- 1. Докажите, что vnil является нейтральным элементом для v++.
 
-\func vnil-rightId {A : \Type} {n : Nat} (xs : Vec A n) : transport (Vec A) (+-comm 0 n) (xs v++ vnil) = xs => {?}
+\func vnil-rightId {A : \Type} {n : Nat} (xs : Vec A n) : transport (Vec A) (+-comm 0 n) (xs v++ vnil) = xs
+  \elim n, xs
+    | zero, vnil => idp
+    | suc n, vcons x xs => transport-vnil-rightId x (xs v++ vnil) (+-comm 0 n) *> pmap (vcons x) (vnil-rightId xs)
+  \func transport-vnil-rightId {A : \Type} {n m : Nat}
+                        (x : A) (xs : Vec A n) (p : n = m)
+    : transport (Vec A) (pmap suc p) (vcons x xs) =
+      vcons x (transport (Vec A) p xs)
+    => J (\lam m p =>
+          transport (Vec A) (pmap suc p) (vcons x xs) =
+          vcons x (transport (Vec A) p xs))
+         idp
+         p
 
--- 2. У оператора J есть другая форма, которую мы будем называть Jalt. Докажите, что J и Jalt эквивалентны, то есть выразите одно через другое и наоборот.
+-- 2. У оператора J есть другая форма, которую мы будем называть Jalt.
+-- Докажите, что J и Jalt эквивалентны, то есть выразите одно через другое и наоборот.
 
 -- Выразите Jalt через J. Можно пользоваться только J, idp и всем, что через них выражается.
 
-\func Jalt {A : \Type} (B : \Pi (a a' : A) -> a = a' -> \Type)
+\func Jalt {A : \Type}
+           (B : \Pi (a a' : A) -> a = a' -> \Type)
            (b : \Pi (a : A) -> B a a idp)
-           {a a' : A} (p : a = a') : B a a' p => {?}
+           {a a' : A}
+           (p : a = a') : B a a' p
+  => J (B a) (b a) p
 
 -- Выразите J через Jalt. Можно пользоваться только Jalt, idp и всем, что через них выражается.
 -- Hint:
@@ -19,13 +36,16 @@
 -- 2. Докажите, что тип \Sigma (x : A) (a = x) одноэлементный, то есть, что для любого p : \Sigma (x : A) (a = x) верно, что (x,idp) = p.
 -- 3. Используя эти две конструкции, легко определить J.
 
-\func transport' {A : \Type} (B : A -> \Type) {a a' : A} (p : a = a') (b : B a) : B a' => {?}
+\func transport' {A : \Type} (B : A -> \Type) {a a' : A} (p : a = a') (b : B a) : B a'
+  => Jalt (\lam x y i => (B x -> B y)) (\lam _ x => x) p b
 
-\func sigma-contr {A : \Type} {a : A} (p : \Sigma (x : A) (a = x)) : (a,idp) = {\Sigma (x : A) (a = x)} p => {?}
+\func sigma-contr {A : \Type} {a : A} (p : \Sigma (x : A) (a = x)) : (a, idp) = {\Sigma (x : A) (a = x)} p
+  => Jalt (\lam x' y' p' => (x', idp) = {\Sigma (x : A) (x' = x)} (y', p')) (\lam _ => idp) p.2
 
 \func J' {A : \Type} {a : A} (B : \Pi (a' : A) -> a = a' -> \Type)
          (b : B a idp)
-         {a' : A} (p : a = a') : B a' p => {?}
+         {a' : A} (p : a = a') : B a' p
+  => transport' (\lam x => B x.1 x.2) (sigma-contr (a', p)) b
 
 -- 3. Определите предикат принадлежности элемента списку.
 
