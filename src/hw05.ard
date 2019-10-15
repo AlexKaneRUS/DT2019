@@ -35,7 +35,15 @@
 -- 4. Определите факториал через Nat-rec.
 
 -- Неправильно
-\func fac-rec (x : Nat) : Nat => Nat-rec Nat 1 (*) x
+-- Исправил!
+\func fac-rec (x : Nat) : Nat => Nat-rec Nat 1 helper (suc x)
+  \where
+    \func helper (x y : Nat) : Nat \elim x
+      | zero => y
+      | suc x => suc x * y
+
+
+\func f-test : (fac-rec 6 = 720) => idp
 
 -- 5. Докажите ассоциативность сложения для натуральных чисел через Nat-elim.
 
@@ -50,14 +58,15 @@
   | con3 (Nat -> D)
 
 -- Рекурсор в параметрах, соответствующих конструкторам, должен принимать не только результат рекурсивного вызова, но и аргументы конструктора.
+-- Поправил!
 \func D-rec {P : \Type}
             (con1' : Nat -> P)
-            (con2' : P -> P -> P)
-            (con3' : (Nat -> P) -> P)
+            (con2' : D -> P -> D -> P -> P)
+            (con3' : (Nat -> D) -> (Nat -> P) -> P)
             (x : D) : P \elim x
   | con1 n => con1' n
-  | con2 l r => con2' (D-rec con1' con2' con3' l) (D-rec con1' con2' con3' r)
-  | con3 f => con3' (\lam x => D-rec con1' con2' con3' (f x))
+  | con2 l r => con2' l (D-rec con1' con2' con3' l) r (D-rec con1' con2' con3' r)
+  | con3 f => con3' f (\lam x => D-rec con1' con2' con3' (f x))
 
 \func D-elim (P : D -> \Type)
             (con1' : \Pi (n : Nat) -> P (con1 n))
@@ -71,12 +80,13 @@
 -- 7. Определите рекурсор и элиминатор для List.
 
 -- Параметр cons' должен принимать не только голову, а все аргументы конструктора cons.
+-- Тоже поправил!
 \func List-rec {A P : \Type}
             (nil' : P)
-            (cons' : A -> P -> P)
+            (cons' : A -> List A -> P -> P)
             (x : List A) : P \elim x
   | nil => nil'
-  | cons x xs => cons' x (List-rec nil' cons' xs)
+  | cons x xs => cons' x xs (List-rec nil' cons' xs)
 
 \func List-elim {A : \Type} (P : List A -> \Type)
                (nil' : P nil)
