@@ -1,22 +1,18 @@
 \import Utils
+\import hw05 (zero/=suc)
+\import lect02 (+)
 \import lect05
-\import lect06 (J)
+\import lect06 (<=-refl, <=-step, J, LessOrEq, LessOrEq', lessOrEq, lessOrEq', s<=s, v++-assoc, z<=_)
 
 -- 1. Докажите, что vnil является нейтральным элементом для v++.
+\func \infixl 4 v++ {A : \Type} {n m : Nat} (xs : Vec A n) (ys : Vec A m) : Vec A (m + n) \elim n, xs
+  | 0, vnil => ys
+  | suc n, vcons x xs => vcons x (xs v++ ys)
 
 \func vnil-rightId {A : \Type} {n : Nat} (xs : Vec A n) : transport (Vec A) (+-comm 0 n) (xs v++ vnil) = xs
   \elim n, xs
     | zero, vnil => idp
-    | suc n, vcons x xs => transport-vnil-rightId x (xs v++ vnil) (+-comm 0 n) *> pmap (vcons x) (vnil-rightId xs)
-  \func transport-vnil-rightId {A : \Type} {n m : Nat}
-                        (x : A) (xs : Vec A n) (p : n = m)
-    : transport (Vec A) (pmap suc p) (vcons x xs) =
-      vcons x (transport (Vec A) p xs)
-    => J (\lam m p =>
-          transport (Vec A) (pmap suc p) (vcons x xs) =
-          vcons x (transport (Vec A) p xs))
-         idp
-         p
+    | suc n, vcons x xs => v++-assoc.transport-vcons x (xs v++ vnil) (+-comm 0 n) *> pmap (vcons x) (vnil-rightId xs)
 
 -- 2. У оператора J есть другая форма, которую мы будем называть Jalt.
 -- Докажите, что J и Jalt эквивалентны, то есть выразите одно через другое и наоборот.
@@ -49,21 +45,143 @@
 
 -- 3. Определите предикат принадлежности элемента списку.
 
-\data In {A : \Type} (a : A) (xs : List A)
+\data In {A : \Type} (a : A) (xs : List A) \elim xs
+  | cons x xs => in-tail (In a xs)
+  | cons x xs => in-head (a = x)
 
 -- 4. Докажите эквивалентность четырех различных определений LessOrEq: lessOrEq, lessOrEq', LessOrEq и LessOrEq'.
+
+\func +-comm (n m : Nat) : n + m = m + n
+  | 0, 0 => idp
+  | 0, suc m => pmap suc (+-comm 0 m)
+  | suc n, 0 => pmap suc (+-comm n 0)
+  | suc n, suc m => pmap suc (+-comm (suc n) m *> pmap suc (sym (+-comm n m)) *> +-comm n (suc m))
+
+\func first (m n : Nat) (p : lessOrEq m n) : lessOrEq' m n
+  \elim m, n
+    | 0, _ => ()
+    | suc m, 0 => helper {m} {p.1} p.2
+    | suc m, suc n => first m n (p.1, helper2 p.2)
+  \where {
+    \func helper {m n : Nat} (p : suc m + n = 0) : Empty \elim n
+      | 0 => zero/=suc m (sym p)
+      | suc n => zero/=suc (suc m + n) (sym p)
+
+    \func helper2 {m n k : Nat} (p : suc m + k = suc n) : m + k = n
+      \elim k
+        | 0 => pmap desuc p
+        | suc k => transport (\lam x => suc x = n) (+-comm k m) (transport (\lam x => x = n) (+-comm (suc m) k) (pmap desuc p))
+  }
+
+\func desuc (n : Nat) : Nat \elim n
+  | 0 => 0
+  | suc n => n
+
+\func second (n m : Nat) (p : lessOrEq' n m) : lessOrEq n m
+  \elim n, m
+    | 0, 0 => (0, idp)
+    | 0, suc m => (suc m, pmap suc (transport (\lam x => x = m) (+-comm m 0) idp))
+    | suc n, 0 => absurd p
+    | suc n, suc m => \let pair => second n m p \in (pair.1, helper pair.2)
+  \where {
+    \func helper {m n k : Nat} (p : m + k = n) : suc m + k = suc n
+    \elim k
+      | 0 => pmap suc p
+      | suc k => pmap suc (transport (\lam x => x = n) (+-comm k (suc m)) (transport (\lam x => suc x = n) (+-comm m k) p))
+  }
+
+\func third (n m : Nat) (p : LessOrEq n m) : LessOrEq' n m
+  \elim n, m, p
+    | 0, 0, _ => <=-refl idp
+    | 0, suc m, p => <=-step (third 0 m z<=_)
+    | suc n, suc m, s<=s p => helper n m (third n m p)
+  \where {
+    \func helper (n m : Nat) (p : LessOrEq' n m) : LessOrEq' (suc n) (suc m)
+      \elim n, m, p
+        | 0, 0, _ => <=-refl idp
+        | 0, suc m, <=-step p => <=-step (helper 0 m p)
+        | 0, suc m, <=-refl p => absurd (zero/=suc m p)
+        | suc n, 0, <=-refl p => absurd (zero/=suc n (sym p))
+        | suc n, suc m, <=-refl p => <=-refl (pmap suc p)
+        | suc n, suc m, <=-step p => <=-step (helper (suc n) m p)
+  }
+
+\func fourth (n m : Nat) (p : LessOrEq' n m) : LessOrEq n m \elim n, m, p
+  | 0, suc m, <=-step p => z<=_
+  | suc n, suc m, <=-step p => s<=s (fourth n m (helper1 n m p))
+  | 0, _, <=-refl p => z<=_
+  | suc n, 0, <=-refl p => absurd (zero/=suc n (sym p))
+  | suc n, suc m, <=-refl p => helper n m (fourth n m (<=-refl (pmap desuc p)))
+ \where {
+   \func helper (n m : Nat) (p : LessOrEq n m) : LessOrEq (suc n) (suc m)
+   \elim n, m, p
+     | 0, _, _ => s<=s z<=_
+     | suc n, suc m, s<=s p => s<=s (helper n m p)
+
+   \func helper1 (n m : Nat) (p : LessOrEq' (suc n) m) : LessOrEq' n m
+   \elim m, p
+     | 0, <=-refl p => absurd (zero/=suc n (sym p))
+     | suc m, <=-refl p => <=-step (<=-refl (pmap desuc p))
+     | suc m, <=-step p => <=-step (helper1 n m p)
+ }
+
+\func final (n m : Nat) (p : lessOrEq n m) : LessOrEq n m
+  \elim n, m
+    | 0, _ => z<=_
+    | suc n, 0 => absurd (first.helper p.2)
+    | suc n, suc m => fourth.helper n m (final n m (p.1, first.helper2 p.2))
+
+\func final2 (n m : Nat) (p : LessOrEq n m) : lessOrEq n m
+  \elim n, m, p
+    | 0, m, _ => (m, transport (\lam x => x = m) (+-comm m 0) idp)
+    | suc n, suc m, s<=s p => \let pair => final2 n m p \in (pair.1, second.helper pair.2)
 
 -- 5. Определите рефлексивное транзитивное замыкание отношения.
 --    То есть ReflTransClosure R -- это минимальное рефлексивное и транзитивное отношение, содержащее R.
 
 \data ReflTransClosure {A : \Type} (R : A -> A -> \Type) (x y : A)
+  | refl-trans (R x y) (R x x) (R y y) (\Pi (z : A) -> R x y -> R y z -> R x z)
 
 -- 6. Докажите, что если R уже рекфлексивно и транзитивно, то ReflTransClosure R эквивалентно R.
 
 \func \infix 4 <-> {A : \Type} (P Q : A -> A -> \Type) => \Pi (x y : A) -> \Sigma (P x y -> Q x y) (Q x y -> P x y)
 
-\func ReflTransClosure-lem {A : \Type} (R : A -> A -> \Type) (refl : \Pi (x : A) -> R x x) (trans : \Pi (x y z : A) -> R x y -> R y z -> R x z) : R <-> ReflTransClosure R => {?}
+\func ReflTransClosure-lem {A : \Type} (R : A -> A -> \Type) (refl : \Pi (x : A) -> R x x) (trans : \Pi (x y z : A) -> R x y -> R y z -> R x z) :
+  R <-> ReflTransClosure R => \lam x y => (\lam pxy => refl-trans pxy (refl x) (refl y) (trans x y), helper)
+  \where {
+    \func helper {A : \Type} {R : A -> A -> \Type} {x y : A} (r : ReflTransClosure R x y) : R x y \elim r
+    | refl-trans x _ _ _ => x
+  }
 
 -- 7. Определите предикат xs <= ys на списках, означающий "список xs является подсписком ys".
 
+\data \infix 4 <= {A : \Type} (xs : List A) (ys : List A) \elim xs, ys
+  | nil, _ => <=-nil
+  | cons x xs, cons y ys => <=-contains (x = y) (xs <= ys)
+  | cons x xs, cons y ys => <=-down (cons x xs <= ys)
+
+\func =-trans {A : \Type} {x y z : A} (p1 : x = y) (p2 : y = z) : x = z
+  => transport (\lam x => x = z) (sym p1) p2
+
 -- 8. Докажите, что filter xs <= xs для любого списка xs.
+
+\func if {A : \Type} (x : Bool) (t e : A) : A \elim x
+  | true => t
+  | false => e
+
+\func filter {A : \Type} (p : A -> Bool) (xs : List A) : List A \elim xs
+  | nil => nil
+  | cons x xs => if (p x) (cons x (filter p xs)) (filter p xs)
+
+\func proof {A : \Type} (p : A -> Bool) (xs : List A) : filter p xs <= xs \elim xs
+  | nil => <=-nil
+  | cons x xs => helper p (p x) x xs
+  \where {
+    \func helper {A : \Type} (p : A -> Bool) (b : Bool) (x : A) (xs : List A) : if b (cons x (filter p xs)) (filter p xs) <= cons x xs \elim b
+      | true => <=-contains idp (proof p xs)
+      | false => helperBig (proof p xs)
+
+    \func helperBig {A : \Type} {x : A} {xs ys : List A} (p : xs <= ys) : xs <= cons x ys \elim xs
+      | nil => <=-nil
+      | cons x xs => <=-down p
+  }

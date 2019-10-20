@@ -1,4 +1,5 @@
 \import Utils
+\import lect02 ()
 
 -- 1. Оператор J.
 
@@ -151,7 +152,7 @@
 -- * Индуктивно.
 
 -- Определение <= через равенство.
-\func lessOrEq (n m : Nat) => \Sigma (k : Nat) (n + k = m)
+\func lessOrEq (n m : Nat) => \Sigma (k : Nat) (n lect02.+ k = m)
 
 -- Рекурсивное определение предиката <=
 \func lessOrEq' (n m : Nat) : \Type
