@@ -1,39 +1,145 @@
+\import Utils (idp, pmap, sym, transport)
+\import hw02 (gcd)
+\import lect05 (funExt)
 \import lect07
 
 -- 1. Определите функцию swap несколькими способами.
 
 -- При помощи \cowith и доступа к полям.
-\func swap {A B : \Type} (p : Pair A B) : Pair B A => {?}
+\func swap {A B : \Type} (p : Pair A B) : Pair B A \cowith
+  | fst_ => p.snd_
+  | snd_ => p.fst_
 
 -- При помощи \new и паттерн матчинга.
-\func swap' {A B : \Type} (p : Pair A B) : Pair B A => {?}
+\func swap' {A B : \Type} (p : Pair A B) : Pair B A
+  | (a, b) => \new Pair {
+                | fst_ => b
+                | snd_ => a
+              }
+
 
 -- При помощи \new и доступа к полям.
-\func swap'' {A B : \Type} (p : Pair A B) : Pair B A => {?}
+\func swap'' {A B : \Type} (p : Pair A B) : Pair B A
+  => \new Pair {
+    | fst_ => p.snd_
+    | snd_ => p.fst_
+  }
 
 -- 2. Докажите, что swap (swap p) = p.
 
-\func swap-involutive {A B : \Type} (p : Pair A B) : swap (swap p) = p => {?}
+\func etaPair {A B : \Type} (p : Pair A B) : p =
+  \new Pair A B {
+    | fst_ => p.fst_
+    | snd_ => p.snd_
+  } => idp
+
+\func swap-involutive {A B : \Type} (p : Pair A B) : swap (swap p) = p
+  => idp
 
 -- 3. Докажите, что тип PosNat 0 пустой, а тип PosNat 1 нет.
 
 \data Empty
 
-\func zero-isNotPos (p : PosNat 0) : Empty => {?}
+\func zero-isNotPos (p : PosNat 0) : Empty => \case p.p \with {}
 
-\func one-isPos : PosNat 1 => {?}
+\func one-isPos : PosNat 1 \cowith
+  | p => tt
+
 
 -- 4. Определите \record, состоящий из пар взаимно простых натуральных чисел.
 --    Определите тип, состоящий из натуральных чисел, взаимно простых с 60.
 
+\record MutPrime (n1 : Nat) (n2 : Nat) (p : gcd n1 n2 = 1)
+
+\data MutPrime60 (MutPrime 60)
+
 -- 5. Определите класс монад, который наследует класс функторов. Определите \instance этого класса для Maybe.
 
 \data Maybe (A : \Type) | nothing | just A
+
+\class Monad \extends Functor {
+  | \infix 4 >>= {A B : \Type} : F A -> (A -> F B) -> F B
+  | return {A : \Type} : A -> F A
+  | bind-assoc {A B C : \Type} (x : F A) (f : A -> F B) (g : B -> F C) : (x >>= f) >>= g = x >>= (\lam x => f x >>= g)
+  | id-right {A : \Type} (x : F A) : x >>= return = x
+  | id-left {A B : \Type} (x : A) (f : A -> F B) : return x >>= f = f x
+  | fmap => \lam f x => x >>= (\lam x => return (f x))
+  | fmap-id => id-right
+  | fmap-comp =>
+    \lam {A B C : \Type} (f : A -> B) (g : B -> C) (y : F A)
+      => sym (transport (\lam t => t = y >>= (\lam x => return (g (f x))))
+                        (sym (bind-assoc y (\lam x => return (f x)) (\lam x => return (g x))))
+                        (helper {A} {B} {C} {F} {return} {>>=} {id-left} y f g))
+}
+
+\func helper {A B C : \Type} {F : \Type -> \Type}
+             {return : \Pi {A : \Type} -> A -> F A} {bind : \Pi {A B : \Type} -> F A -> (A -> F B) -> F B} {id-left : \Pi {A B : \Type} -> \Pi (x : A) (f : A -> F B) -> return x `bind` f = f x}
+             (y : F A) (f : A -> B) (g : B -> C) :
+  (y `bind` (\lam (x : A) => return (f x) `bind` (\lam (x : B) => return (g x)))) = (y `bind` (\lam (x : A) => return (g (f x))))
+  => pmap (\lam x => y `bind` x) (funExt {A} (\lam _ => F C) (\lam z => id-left (f z) (\lam t => return (g t))))
+
+\instance MaybeMonad : Monad Maybe
+  | >>= => maybeBind
+  | return => just
+  | bind-assoc => maybe-bind-assoc
+  | id-right => maybe-id-right
+  | id-left => maybe-id-left
+  \where {
+    \func maybeBind {A B : \Type} (l : Maybe A) (f : A -> Maybe B) : Maybe B \elim l
+      | nothing => nothing
+      | just x  => f x
+
+    \func maybe-bind-assoc {A B C : \Type} (x : Maybe A) (f : A -> Maybe B) (g : B -> Maybe C)
+      : (x `maybeBind` f) `maybeBind` g = x `maybeBind` (\lam x => f x `maybeBind` g) \elim x
+        | nothing => idp
+        | just x => idp
+
+    \func maybe-id-right {A : \Type} (x : Maybe A) : x `maybeBind` just = x \elim x
+      | nothing => idp
+      | just x => idp
+
+    \func maybe-id-left {A B : \Type} (x : A) (f : A -> Maybe B) : just x `maybeBind` f = f x => \case (f x) \with {
+      | nothing => idp
+      | just a => idp
+    }
+  }
 
 -- 6. Определите инстансы монады для State и State'.
 
 \record State (S A : \Type)
   | state : S -> \Sigma S A
 
+\instance StateMonad (S : \Type) : Monad (\lam A => State S A)
+  | >>= => {?}
+  | return => {?}
+  | bind-assoc => {?}
+  | id-right => {?}
+  | id-left => {?}
+
 \data State' (S A : \Type)
   | state' (S -> \Sigma S A)
+
+\instance StateMonad' (S : \Type) : Monad (State' S)
+  | >>= => stateBind
+  | return => \lam x => state' (\lam s => (s, x))
+  | bind-assoc => {?}
+  | id-right => {?}
+  | id-left => {?}
+  \where {
+    \func stateBind {S A B : \Type} (l : State' S A) (f : A -> State' S B) : State' S B \elim l
+      | state' f' => state' (\lam s => helper' (f (f' s).2) (f' s).1)
+
+    \func helper' {B S : \Type} (s : State' S B) (x : S) : \Sigma S B \elim s
+      | state' f => f x
+
+    \func state-bind-assoc {S A B C : \Type} (x : State' S A) (f : A -> State' S B) (g : B -> State' S C)
+      : (x `stateBind` f) `stateBind` g = x `stateBind` (\lam x => f x `stateBind` g) \elim x
+        | state' fs => pmap state' (funExt {S} (\lam _ => \Sigma S C) (helper1 {S} {A} {B} {C} {fs} {f} {g}))
+      \where {
+        \func helper1 {S A B C : \Type}
+                      {fs : S -> \Sigma S A} {f : A -> State' S B} {g : B -> State' S C} (a : S)
+          : helper' (g (helper' (f (fs a).2) (fs a).1).2) (helper' (f (fs a).2) (fs a).1).1
+            = helper' (stateBind (f (fs a).2) g) (fs a).1
+          => {?}
+      }
+  }
