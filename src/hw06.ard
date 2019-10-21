@@ -141,17 +141,20 @@
 
 -- Неправильно. Рефлексивное транзитивное замыкание должно быть как минимум рефлексивным. Как же доказать, что ReflTransClosure R рефлексивно?
 \data ReflTransClosure {A : \Type} (R : A -> A -> \Type) (x y : A)
-  | refl-trans (R x y) (R x x) (R y y) (\Pi (z : A) -> R x y -> R y z -> R x z)
+  | refl (x = y)
+  | trans (z : A) (ReflTransClosure R x z) (R z y)
 
 -- 6. Докажите, что если R уже рекфлексивно и транзитивно, то ReflTransClosure R эквивалентно R.
 
 \func \infix 4 <-> {A : \Type} (P Q : A -> A -> \Type) => \Pi (x y : A) -> \Sigma (P x y -> Q x y) (Q x y -> P x y)
 
 \func ReflTransClosure-lem {A : \Type} (R : A -> A -> \Type) (refl : \Pi (x : A) -> R x x) (trans : \Pi (x y z : A) -> R x y -> R y z -> R x z) :
-  R <-> ReflTransClosure R => \lam x y => (\lam pxy => refl-trans pxy (refl x) (refl y) (trans x y), helper)
+  R <-> ReflTransClosure R => \lam x y
+    => (\lam rxy => ReflTransClosure.trans x (ReflTransClosure.refl idp) rxy, \lam rftxy => helper refl trans rftxy)
   \where {
-    \func helper {A : \Type} {R : A -> A -> \Type} {x y : A} (r : ReflTransClosure R x y) : R x y \elim r
-    | refl-trans x _ _ _ => x
+    \func helper {A : \Type} {R : A -> A -> \Type} {x y : A} (refl : \Pi (x : A) -> R x x) (trans : \Pi (x y z : A) -> R x y -> R y z -> R x z) (r : ReflTransClosure R x y) : R x y \elim r
+    | refl p => transport (\lam t => R x t) p (refl x)
+    | trans z rxz rzy => trans x z y (helper refl trans rxz) rzy
   }
 
 -- 7. Определите предикат xs <= ys на списках, означающий "список xs является подсписком ys".
