@@ -1,5 +1,6 @@
 \import Utils (idp, pmap, sym, transport)
 \import hw02 (gcd)
+\import hw06
 \import lect05 (funExt)
 \import lect07
 
@@ -110,36 +111,50 @@
   | state : S -> \Sigma S A
 
 \instance StateMonad (S : \Type) : Monad (\lam A => State S A)
-  | >>= => {?}
-  | return => {?}
-  | bind-assoc => {?}
-  | id-right => {?}
-  | id-left => {?}
+  | >>= => stateBind
+  | return => \lam {A : \Type} (x : A) => \new State S A { | state => \lam s => (s, x)}
+  | bind-assoc => \lam x f g => idp
+  | id-right => \lam x => idp
+  | id-left => \lam x f => idp
+  \where {
+    \func stateBind {S A B : \Type} (l : State S A) (f : A -> State S B) : State S B
+    \cowith
+      | state => (\lam s => state {f (l.state s).2} (l.state s).1)
+  }
 
 \data State' (S A : \Type)
   | state' (S -> \Sigma S A)
 
-\instance StateMonad' (S : \Type) : Monad (State' S)
-  | >>= => stateBind
-  | return => \lam x => state' (\lam s => (s, x))
-  | bind-assoc => {?}
-  | id-right => {?}
-  | id-left => {?}
+\func vToS {S A : \Type} (x : State' S A) : State S A \elim x
+  | state' f => \new State S A {
+    | state => f
+  }
+
+\func fToS {S A B : \Type} (f : A -> State' S B) (x : A) : State S B => vToS (f x)
+
+\instance StateMonad' (S : \Type) {m : Monad (\lam A => State S A)} : Monad (State' S)
+  | >>= => \lam {A : \Type} (x : State' S A) f => state' (state {vToS x m.>>= fToS f})
+  | return => \lam x => state' (state {m.return x})
+  | bind-assoc => \lam {A B C : \Type} x f g
+    => pmap state' (pmap (\lam (x : State S C) => state {x}) (m.bind-assoc (vToS x) (fToS f) (fToS g)))
+  | id-right => \lam {A : \Type} (x : State' S A) => transport (\lam y => y = x)
+                                                               (sym (pmap state' (pmap (\lam (x : State S A) => state {x}) (m.id-right (vToS x)))))
+                                                               (helper {A} {S} {m} x)
+  | id-left => \lam {A B : \Type} (x : A) (f : A -> State' S B) =>
+      transport
+      (\lam y => y = f x)
+      (sym (pmap state' (pmap (\lam (x : State S B) => state {x}) (m.id-left x (fToS f)))))
+      (helper1 {A} {B} {S} {m} x f)
   \where {
-    \func stateBind {S A B : \Type} (l : State' S A) (f : A -> State' S B) : State' S B \elim l
-      | state' f' => state' (\lam s => helper' (f (f' s).2) (f' s).1)
+    \func helper {A S : \Type} {m : Monad (\lam A => State S A)} (x : State' S A) : state' {S} {A} (state {vToS {S} {A} x}) = x \elim x
+      | state' f => idp
 
-    \func helper' {B S : \Type} (s : State' S B) (x : S) : \Sigma S B \elim s
-      | state' f => f x
+    \func helper1 {A B S : \Type} {m : Monad (\lam A => State S A)} (x : A) (f : A -> State' S B) :
+      state' (state {vToS (f x)}) = f x => \case f x \with {
+        | state' f' => helper2 {A} {B} {S} {m} (f x)
+    }
 
-    \func state-bind-assoc {S A B C : \Type} (x : State' S A) (f : A -> State' S B) (g : B -> State' S C)
-      : (x `stateBind` f) `stateBind` g = x `stateBind` (\lam x => f x `stateBind` g) \elim x
-        | state' fs => pmap state' (funExt {S} (\lam _ => \Sigma S C) (helper1 {S} {A} {B} {C} {fs} {f} {g}))
-      \where {
-        \func helper1 {S A B C : \Type}
-                      {fs : S -> \Sigma S A} {f : A -> State' S B} {g : B -> State' S C} (a : S)
-          : helper' (g (helper' (f (fs a).2) (fs a).1).2) (helper' (f (fs a).2) (fs a).1).1
-            = helper' (stateBind (f (fs a).2) g) (fs a).1
-          => {?}
-      }
+    \func helper2 {A B S : \Type} {m : Monad (\lam A => State S A)} (fx : State' S B) :
+      state' (state {vToS fx}) = fx \elim fx
+        | state' f' => idp
   }
