@@ -6,6 +6,9 @@
 
 \func pmap {A B : \Type} (f : A -> B) {a a' : A} (p : a = a') : f a = f a' => path (\lam i => f (p @ i))
 
+\func pmap2 {A B C : \Type} (f : A -> B -> C) {a a' : A} {b b' : B} (p : a = a') (p' : b = b') : f a b = f a' b'
+  => path (\lam i => f (p @ i) (p' @ i))
+
 \func transport {A : \Type} (B : A -> \Type) {a a' : A} (p : a = a') (b : B a) : B a'
   => coe (\lam i => B (p @ i)) b right
 

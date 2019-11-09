@@ -1,26 +1,146 @@
+\import hw02 ()
+\import hw05 (*-comm)
+\import hw06 (if)
+\import lect02 ()
+\import lect05 (+-comm, funExt, true/=false)
 \import lect08
 \import Utils
 \open Nat(+,*)
 
 -- 1. Реализуйте любой алгоритм сортировки, используя \case для паттерн матчинга на результате сравнения элементов списка.
 
+\func sort {A : \Type} (l : List A) (comp : A -> A -> Bool) => sortRec' (length l) l comp
+  \where {
+    \func sortRec' {A : \Type} (s : Nat) (l : List A) (comp : A -> A -> Bool) : List A \elim s, l
+      | 0, _ => nil
+      | suc _, nil => nil
+      | suc _, cons x nil => cons x nil
+      | suc s, l => \let (left, right) => split l \in
+        merge (sortRec' s left comp) (sortRec' s right comp) comp
+
+    \func split {A : \Type} (l : List A) : \Sigma (List A) (List A) =>
+      \let | len => length l
+           | half => lect02.div len 2
+      \in divAt l half 0 nil
+
+      \where {
+        \func divAt {A : \Type} (l : List A) (stopInd : Nat) (curInd : Nat) (acc : List A) : \Sigma (List A) (List A) \elim l
+          | nil => (nil, acc)
+          | cons lx lxs \as l => \case stopInd == curInd \with {
+            | true => (acc, l)
+            | false => (divAt lxs stopInd (curInd + 1) (cons lx acc))
+          }
+      }
+
+    \func length {A : \Type} (l : List A) : Nat
+      | nil => 0
+      | cons _ xs => length xs + 1
+
+    \func merge {A : \Type} (l : List A) (r : List A) (comp : A -> A -> Bool) : List A \elim l, r
+      | nil, y => y
+      | x, nil => x
+      | cons x xs \as l, cons y ys \as r => \case comp y x \with {
+        | true => (cons x (merge xs r comp))
+        | false => (cons y (merge l ys comp))
+      }
+  }
+
+\func sortTest1 : sort (cons 1 (cons 2 (cons 3 nil))) (<) = cons 3 (cons 2 (cons 1 nil)) => idp
+
+\func \infix 4 > (x y : Nat) : Bool
+  | 0, 0 => false
+  | 0, suc y => false
+  | suc x, 0 => true
+  | suc x, suc y => x > y
+
+\func sortTest2 : sort (cons 5 (cons 4 (cons 3 (cons 2 (cons 1 nil))))) (>) = cons 1 (cons 2 (cons 3 (cons 4 (cons 5 nil)))) => idp
+
+
 -- 2. Определите filter через if, а не через \case.
 --    Докажите для этой версии filter лемму filter-lem.
 
-\func filter' {A : \Type} (p : A -> Bool) (xs : List A) : List A => {?}
+\func filter' {A : \Type} (p : A -> Bool) (xs : List A) : List A \elim xs
+  | nil => nil
+  | cons x xs => if (p x) (cons x (filter' p xs)) (filter' p xs)
 
-\func filter-lem {A : \Type} (p : A -> Bool) (xs : List A) : length (filter' p xs) <= length xs => {?}
+\func filter-lem {A : \Type} (p : A -> Bool) (xs : List A) : length (filter' p xs) <= length xs \elim xs
+  | nil => ()
+  | cons x xs => \case p x \as b \return length (if b (cons x (filter' p xs)) (filter' p xs)) <= suc (length xs) \with {
+    | true => filter-lem p xs
+    | false => <=-helper (filter-lem p xs)
+  }
 
 -- 3. Докажите, что если равенство элементов A разрешимо, то и равенство элементов List A тоже разрешимо.
 
 \instance ListEq {A : \Type} (dec : Eq A) : Eq (List A)
-  | decideEq => {?}
+  | decideEq => helper
+  \where {
+    \func helper {A : \Type} {dec : Eq A} (xs ys : List A) : Decide (xs = ys) \elim xs, ys
+      | nil, nil => yes idp
+      | nil, cons a l => no obvious
+      | cons a l, nil => no obvious'
+      | cons x xs, cons y ys => \case dec.decideEq x y \with {
+        | yes a => \case helper xs ys \with {
+          | yes a' => yes (helper3 a a')
+          | no _x => no (\lam t => _x (helper2 t))
+        }
+        | no _x => no (\lam t => _x (helper1 t))
+      }
+
+    \func obvious {A : \Type} {a : A} {l : List A} (p : nil = cons a l) : Empty => true/=false (transport (\lam x => true = helper x) p idp)
+      \where {
+        \func helper {A : \Type} (xs : List A) : Bool \elim xs
+          | nil => true
+          | cons _ _ => false
+      }
+
+    \func obvious' {A : \Type} {a : A} {l : List A} (p : cons a l = nil) : Empty => true/=false (transport (\lam x => helper x = false) p idp)
+      \where {
+        \func helper {A : \Type} (xs : List A) : Bool \elim xs
+          | nil => true
+          | cons _ _ => false
+      }
+
+    \func head {A : \Type} (n : A) (l : List A) : A \elim l
+      | nil => n
+      | cons x xs => x
+
+    \func tail {A : \Type} (l : List A) : List A \elim l
+      | nil => nil
+      | cons x xs => xs
+
+    \func helper1 {A : \Type} {x y : A} {xs ys : List A} (p' : cons x xs = cons y ys) : x = y
+      => pmap (head x) p'
+
+    \func helper2 {A : \Type} {x y : A} {xs ys : List A} (p' : cons x xs = cons y ys) : xs = ys
+      => pmap tail p'
+
+    \func helper3 {A : \Type} {x y : A} {xs ys : List A} (p : x = y) (p' : xs = ys) : cons x xs = cons y ys
+      => pmap2 cons p p'
+  }
 
 -- 4. Докажите, что предикат isEven разрешим.
 
 \func isEven (n : Nat) => \Sigma (k : Nat) (n = 2 * k)
 
-\func isEven-dec : DecPred isEven => {?}
+\func isEven-dec : DecPred isEven => helper
+  \where {
+    \func helper (x : Nat) : Decide (isEven x) => \case parity x \with {
+      | even k p => yes (k, p)
+      | odd k p => no (\lam t => \case t \with {
+        | (a, b) => helper1 x a k (transport (\lam y => y = 2 * a) p b)
+      })
+    }
+
+    \func helper1 (x a k : Nat) (p : suc (2 * k) = 2 * a) : Empty \elim a, k
+      | 0, _ => suc/=0 p
+      | suc a, 0 => suc/=0 (sym (pmap desuc p))
+      | suc a, suc k => helper1 x a k (pmap desuc (pmap desuc p))
+
+    \func desuc (n : Nat) : Nat \elim n
+      | 0 => 0
+      | suc n => n
+  }
 
 -- 5. Докажите, что если равенство элементов A разрешимо, то любой список элементов A либо пуст, либо состоит из повторений одного элемента, либо в A существует два различных элемента.
 
@@ -33,7 +153,22 @@
   | repeated (n : Nat) (a : A) (p : xs = repeat n a)
   | A-is-not-trivial (a a' : A) (p : a = a' -> Empty)
 
-\func lemma {A : \Type} (xs : List A) {dec : DecEq A} : Result A xs => {?}
+\func =-trans {A : \Type} {x y c : A} (p : x = y) (p' : y = c) : x = c
+  => transport (\lam x' => x' = c) (sym p) p'
+
+\func lemma {A : \Type} (xs : List A) {dec : DecEq A} : Result A xs \elim xs
+  | nil => empty idp
+  | cons x xs => \case dec x x \with {
+    | yes a => \case lemma {A} xs {dec} \with {
+      | empty _x => repeated 1 x (pmap (cons x) _x)
+      | repeated n a' p => \case dec x a' \with {
+        | yes a'' => repeated (suc n) x (transport (\lam t => cons x xs = cons x (repeat n t)) (sym a'') (pmap (cons x) p))
+        | no _x => A-is-not-trivial x a' _x
+      }
+      | A-is-not-trivial a a' p => A-is-not-trivial a a' p
+    }
+    | no _x => A-is-not-trivial x x _x
+  }
 
 -- 6. Определите view, представляющий число в виде частного и остатка от деления его на произвольное (неотрицательное) число m.
 --    Реализуйте функцию деления.
@@ -41,28 +176,114 @@
 \data ModView (m n : Nat)
   | quot-rem (q r : Nat) (t : T (r < m)) (p : n = q * m + r)
 
-\func mod-view (m n : Nat) (t : T (0 < m)) : ModView m n => {?}
+\func eqOrL (m n : Nat) (p : T (m < n)) : Either (suc m = n) (T (suc m < n)) \elim m, n
+  | 0, 0 => inr p
+  | 0, suc n => helper n
+  | suc m, 0 => inr p
+  | suc m, suc n => \case eqOrL m n p \with {
+    | inl a => inl (pmap suc a)
+    | inr b => inr b
+  }
+  \where {
+    \func helper (n : Nat) : Either (1 = suc n) (T (0 < n)) \elim n
+      | 0 => inl idp
+      | suc n => inr ()
+  }
 
-\func div (n m : Nat) (t : T (0 < m)) : Nat => {?}
+\func mod-view (m n : Nat) (t : T (0 < m)) : ModView m n \elim m, n
+  | 0, _ => absurd t
+  | suc m, 0 => quot-rem 0 0 () (transport (\lam x => x = 0 * m) (*-comm 0 m) idp)
+  | suc m, suc n => helper {n} {m} () ()
+  \where {
+    \func helper {n m : Nat} (p : T (0 < suc n)) (p' : T (0 < suc m)) : ModView (suc m) (suc n) \elim m
+      | 0 => quot-rem (suc n) 0 () (pmap suc (transport (\lam x => n = x) (+-comm n 0) idp))
+      | suc m => helper1 {n} {suc (suc m)} {()} (mod-view (suc (suc m)) n ())
+
+    \func helper1 {n m : Nat} {t : T (1 < m)} (mv : ModView m n) : ModView m (suc n) \elim mv
+      | quot-rem q r t' p => helper2 {n} {m} {q} {r} {t} {t'} p
+
+    \func trans< {a b c : Nat} (p : T (a < b)) (p' : T (b < c)) : T (a < c)
+    \elim a, b, c
+      | _, 0, 0 => absurd p'
+      | _, suc _, 0 => absurd p'
+      | 0, 0, _ => absurd p
+      | suc _, 0, _ => absurd p
+      | 0, suc b, suc c => ()
+      | suc a, suc b, suc c => trans< {a} {b} {c} p p'
+
+    \func helper4 (r : Nat) : T (r < suc r) \elim r
+      | 0 => ()
+      | suc n => helper4 n
+
+    \func helper2 {n m q r : Nat} {t : T (1 < m)} {t' : T (r < m)} (p : n = q * m + r) : ModView m (suc n) \elim r
+      | 0 => quot-rem q 1 t (pmap suc p)
+      | suc r => \case eqOrL (suc r) m t' \as b \with {
+        | inl a => quot-rem (suc q) 0 (trans< {0} {1} {m} (helper4 0) t) (kek a (pmap suc p))
+        | inr b => quot-rem q (r + 2) b (pmap suc p)
+      }
+
+    \func kek {m q n r : Nat} (p0 : suc (suc r) = m) (p1 : suc n = suc (suc (q * m + r))) : suc n = suc q * m
+      => =-trans (=-trans (=-trans p1 helper) (helper1 p0)) helper2
+      \where {
+        \func helper {q m r : Nat} : suc (suc (q * m + r)) = q * m + suc (suc r)
+          => idp
+
+        \func helper1 {q m r : Nat} (p : suc (suc r) = m) : q * m + suc (suc r) = q * m + m
+        => transport (\lam x => q * m + suc (suc r) = q * m + x) p idp
+
+        \func helper2 {q m : Nat} : q * m + m = suc q * m
+          => transport (\lam x => q * m + m = x) (*-comm m (suc q)) (sym (transport (\lam x => x + m = q * m + m) (*-comm q m) idp))
+      }
+
+    \func helper3 {n m q r : Nat} {t : T (r + 1 < m)} (p : n = q * m + r) : ModView m (suc n)
+      => quot-rem q (r + 1) t (pmap suc p)
+  }
+
+\func div (n m : Nat) (t : T (0 < m)) : Nat => \case mod-view m n t \with {
+  | quot-rem q r t p => q
+}
 
 -- 7. Докажите, что функции FromBoolToDec и FromDecToBool взаимно обратны.
 
-\func bdb {A : \Type} (p : A -> Bool) : FromDecToBool (FromBoolToDec p) = p => {?}
+\func bdb {A : \Type} (p : A -> Bool) : FromDecToBool (FromBoolToDec p) = p
+  => funExt {A} (\lam _ => Bool) {FromDecToBool (FromBoolToDec p)} {p}
+            (\lam x => \case p x \as b \return
+            (\case \case b \as b \return Decide (T b) \with {
+              | true => yes ()
+              | false => no (\lam x => x)
+            } \with {
+              | yes _ => true
+              | no _ => false
+            }) = b \with {
+              | true => idp
+              | false => idp
+            })
 
 -- Мы не можем доказать, что FromBoolToDec (FromDecToBool P) = P, но мы можем доказать более слабое утверждение: эти предикаты логически эквивалентны.
 -- Для этого введем эквивалентность предикатов.
 
 \func \infix 4 <-> {A : \Type} (P Q : A -> \Type) => \Pi (x : A) -> \Sigma (P x -> Q x) (Q x -> P x)
 
-\func dbd {A : \Type} (P : \Sigma (P : A -> \Type) (DecPred P)) : (FromBoolToDec (FromDecToBool P)).1 <-> P.1 => {?}
+\func dbd {A : \Type} (P : \Sigma (P : A -> \Type) (DecPred P)) : (FromBoolToDec (FromDecToBool P)).1 <-> P.1
+  => \lam x => \case P.2 x \as b \return \Sigma (T (\case b \with {
+    | yes _ => true
+    | no _ => false
+  }) -> P.1 x)
+                                                (P.1 x -> T (\case b \with {
+                                                  | yes _ => true
+                                                  | no _ => false
+                                                })) \with {
+    | yes a => (\lam _ => a, \lam _ => ())
+    | no _x => (absurd, _x)
+  }
 
 -- 8. Укажите явно чему равен уровень в каждом из вызовов id' ниже.
 --    Напишите явно чему равны типы всех функций idTest*.
 
 \func id' {A : \Type} (a : A) => a
 
-\func idTest1 => id' (id' id)
-\func idTest2 => id' Maybe
-\func idTest3 => id' Functor
-\func idTest4 => id' (Functor Maybe)
-\func idTest5 (f : \Pi {A B : \Type} -> (A -> B) -> Maybe A -> Maybe B) => id' (Functor Maybe f)
+\func idTest1 : \Type \lp -> \Type \lp => id' (\suc \lp) (id' (\suc \lp) (id (\Type \lp)))
+\func idTest2 : \Type \lp -> \Type \lp => id' (\suc \lp) Maybe
+\func idTest3 : \Type (\suc \lp) => id' (\suc (\suc \lp)) Functor
+\func idTest4 : \Type (\suc \lp) => id' (\suc (\suc \lp)) (Functor Maybe)
+\func idTest5 (f : \Pi {A B : \Type} -> (A -> B) -> Maybe A -> Maybe B) : \Type \lp => id' (\suc \lp) (Functor Maybe f)
