@@ -1,9 +1,64 @@
+\import Prelude
+\import hw05 (zero/=suc)
+\import hw08 (=-trans)
+\import lect02 (-, if)
+\import lect05 (true/=false)
 \import lect09
 \import Utils
 
 -- 1. Определите div через Nat-ind.
 
-\func div (n k : Nat) : Nat => {?}
+\func div (x y : Nat) (not-zero : 0 < y) : Nat => div' x y not-zero
+  \where {
+    \func div' (x y : Nat) (not-zero : 0 < y) : Nat => Nat-ind (\lam _ => Nat) (\lam x => (\lam f =>
+        \case helper0 x y \with {
+          | inl a => 0
+          | inr b => suc (f (x - y) (helper x y not-zero b))
+        }
+    )) x
+
+    \func helper0 (x y : Nat) : Either (x < y) (y <= x) \elim x, y
+      | 0, 0 => inr Nat.zero<=_
+      | 0, suc n => inl (Nat.suc<=suc Nat.zero<=_)
+      | suc n, 0 => inr Nat.zero<=_
+      | suc x, suc y => \case helper0 x y \with {
+        | inl a => inl (helper5 x y a)
+        | inr b => inr (Nat.suc<=suc b)
+      }
+
+    \func helper (x y : Nat) (y-not-zero : 0 < y) (y<=x : y <= x) : x - y < x \elim x, y
+      | _, 0 => \case y-not-zero \with {}
+      | suc x, suc y => \case helper1 y \with {
+        | inl a => helper2 x y a
+        | inr b => \case y<=x \with {
+          | Nat.suc<=suc p => <=-trans (helper x y b p) (helper4 x)
+        }
+      }
+      | 0, suc n => \case y<=x \with {}
+
+    \func helper1 (y : Nat) : Either (y = 0) (0 < y) \elim y
+      | 0 => inl idp
+      | suc y => inr (Nat.suc<=suc Nat.zero<=_)
+
+    \func helper2 (x y : Nat) (p : y = 0) : x - y < suc x \elim x, y
+      | 0, 0 => helper3 0
+      | 0, suc n => helper3 0
+      | suc n, 0 => helper3 (suc n)
+      | suc x, suc y => absurd (zero/=suc y (sym p))
+
+    \func helper3 (n : Nat) : n < suc n \elim n
+      | 0 => Nat.suc<=suc Nat.zero<=_
+      | suc n => Nat.suc<=suc (helper3 n)
+
+    \func helper4 (n : Nat) : n <= suc n \elim n
+      | 0 => Nat.zero<=_
+      | suc n => Nat.suc<=suc (helper4 n)
+
+    \func helper5 (x y : Nat) (p : x < y) : suc x < suc y \elim x, y
+      | 0, 0 => \case p \with {}
+      | 0, suc n => Nat.suc<=suc (Nat.suc<=suc Nat.zero<=_)
+      | suc x, suc y => Nat.suc<=suc p
+  }
 
 -- 2. Докажите следующий принцип индукции для списков.
 
@@ -11,11 +66,78 @@
   {A : \Type}
   (E : List A -> \Type)
   (r : \Pi (xs : List A) -> (\Pi (ys : List A) -> length ys < length xs -> E ys) -> E xs)
-  (xs : List A) : E xs => {?}
+  (xs : List A) : E xs => aux E r xs xs <=-refl
+  \where
+    \func aux
+      {A : \Type}
+      (E : List A -> \Type)
+      (r : \Pi (xs : List A) -> (\Pi (ys : List A) -> length ys < length xs -> E ys) -> E xs)
+      (ys xs : List A) (p : length ys <= length xs) : E ys \elim ys, xs, p
+      | nil, _, zero<=_ => r nil (\lam ys p => \case p \with {})
+      | cons y ys, cons x xs, Nat.suc<=suc ys<=xs => r (cons y ys) (\lam ys' p => aux E r ys' xs (helper p ys<=xs))
+
+    \func helper {x y z : Nat} (p : x < suc y) (p' : y <= z) : x <= z
+      => \case p \with {
+        | Nat.suc<=suc _x => <=-trans _x p'
+      }
 
 -- 3. Реализуйте функцию filter и докажите ее корректность, то есть, что выполнены следующие условия:
 --    * filter p xs является подсписком xs
 --    * Все элементы filter p xs удовлетворяют предикату p
 --    * Любой подсписок xs с тем же свойством является подсписком filter p xs
 
--- 4. Докажите корректности сортировки вставками.
+\func filter {A : \Type} (p : A -> Bool) (xs : List A) : List A \elim xs
+  | nil => nil
+  | cons a l => \case p a \with {
+    | true => cons a (filter p l)
+    | false => filter p l
+  }
+
+\data IsSublist {A : \Type} (xs : List A) (ys : List A) \elim xs, ys
+  | nil, _ => nil-sublist
+  | cons x xs, cons y ys => head-eq (x = y) (IsSublist xs ys)
+  | l, cons y ys => tail-sub (IsSublist l ys)
+
+\func filter-prop {A : \Type} (p : A -> Bool) (xs : List A) : IsSublist (filter p xs) xs \elim xs
+  | nil => nil-sublist
+  | cons a l => \case p a \as b \return
+                                  IsSublist (\case b \with {
+                                    | false => filter p l
+                                    | true => cons a (filter p l)
+                                  }) (cons a l) \with {
+    | true => head-eq idp (filter-prop p l)
+    | false => tail-sub (filter-prop p l)
+  }
+
+\data DoesSatisfy {A : \Type} (xs : List A) (p : A -> Bool) \elim xs
+  | nil => nil-satisfy
+  | cons a xs => cons-satisfy (p a = true) (DoesSatisfy xs p)
+
+\func satisfy-prop {A : \Type} (p : A -> Bool) (xs : List A) : DoesSatisfy (filter p xs) p \elim xs
+  | nil => nil-satisfy
+  | cons a l => \case p a \as b, idp : p a = b \return
+  DoesSatisfy (\case b \with {
+    | false => filter p l
+    | true => cons a (filter p l)
+  }) p \with {
+    | true, idp' => cons-satisfy idp' (satisfy-prop p l)
+    | false, _ => satisfy-prop p l
+  }
+
+\func final-prop {A : \Type} (xs : List A) (p : A -> Bool)
+                 (xs' : List A) (p' : IsSublist xs' xs) (p'' : DoesSatisfy xs' p) :
+                 IsSublist xs' (filter p xs) \elim xs, xs'
+  | _, nil => nil-sublist
+  | cons a xs, cons a' xs' => \case p a \as b, idp : p a = b \return IsSublist (cons a' xs') (\case b \with {
+    | false => filter p xs
+    | true => cons a (filter p xs)
+  }) \with {
+    | true, idp' => \case p', p'' \with {
+      | head-eq _x i, cons-satisfy t d => head-eq _x (final-prop xs p xs' i d)
+      | tail-sub i, cons-satisfy t d => tail-sub (final-prop xs p (cons a' xs') i p'')
+    }
+    | false, idp' => final-prop xs p (cons a' xs') (\case p', p'' \with {
+      | head-eq _x i, cons-satisfy t d => absurd (true/=false (=-trans (sym t) (=-trans (pmap p _x) idp')))
+      | tail-sub i, cons-satisfy t d => i
+    }) p''
+  }
