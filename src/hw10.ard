@@ -1,3 +1,6 @@
+\import hw05 (zero/=suc)
+\import hw08 (=-trans)
+\import lect05 (true/=false)
 \import lect10
 \import Utils
 
@@ -8,22 +11,41 @@
 -- Композиция функций
 \func \fixr 9 o {A B C : \Type} (g : B -> C) (f : A -> B) => \lam a => g (f a)
 
-\func o-inj {A B C : \Type} (f : A -> B) (g : B -> C) (p : isInj f) (q : isInj g) : isInj (g `o` f) => {?}
+\func o-inj {A B C : \Type} (f : A -> B) (g : B -> C) (p : isInj f) (q : isInj g) : isInj (g `o` f)
+  => \lam x y p' => p x y (q (f x) (f y) p')
 
-\func o-inj' {A B C : \Type} (f : A -> B) (g : B -> C) (p : isInj (g `o` f)) : isInj f => {?}
+\func o-inj' {A B C : \Type} (f : A -> B) (g : B -> C) (p : isInj (g `o` f)) : isInj f
+  => \lam x y p' => p x y (pmap g p')
 
 -- 2. Определите предикат "делится на 3 или на 5" так, чтобы он возвращал утверждения.
 --    Докажите, что MultipleOf3Or5 вкладывается в ℕ.
 
-\func isMultipleOf3Or5 (n : Nat) : \Type => {?}
+\data IsMultipleOf3Or5 (n : Nat)
+  | is3and5 (mod3 n = 0) (mod5 n = 0)
+  | is3 (mod3 n = 0) (mod5 n = 0 -> Empty)
+  | is5 (mod5 n = 0) (mod3 n = 0 -> Empty)
 
-\func isMultipleOf3Or5-isProp (n : Nat) : isProp (isMultipleOf3Or5 n) => {?}
+\func isMultipleOf3Or5 (n : Nat) : \Type => IsMultipleOf3Or5 n
+
+\func isMultipleOf3Or5-isProp (n : Nat) : isProp (isMultipleOf3Or5 n)
+  => \lam x y => \case x \as x', y \as y' \return x' = y' \with {
+    | is3and5 i3 i5, is3and5 i3' i5' => idp
+    | is3 i3 ni5, is3and5 i3' i5' => absurd (ni5 i5')
+    | is3 i3 ni5, is3 i3' ni5' => idp
+    | is3 i3 ni5, is5 i5' ni3' => absurd (ni5 i5')
+    | is5 i5 ni3, is3and5 i3' i5' => absurd (ni3 i3')
+    | is5 i5 ni3, is3 i3' ni5' => absurd (ni5' i5)
+    | is5 i5 ni3, is5 i5' ni3' => idp
+    | is3and5 i3 i5, is3 i3' ni5' => absurd (ni5' i5)
+    | is3and5 i3 i5, is5 i5' ni3' => absurd (ni3' i3)
+  }
 
 \func MultipleOf3Or5 => \Sigma (n : Nat) (isMultipleOf3Or5 n)
 
 \func Mul-inc (m : MultipleOf3Or5) => m.1
 
-\func Mul-inc-isInj : isInj Mul-inc => {?}
+\func Mul-inc-isInj : isInj Mul-inc => \lam x y p => sigmaEq (\lam x => IsMultipleOf3Or5 x) x y p
+                                                             (isMultipleOf3Or5-isProp _ _ _)
 
 -- 3. Мы будем говорить, что тип A тривиален, если существует элемент в A, такой что любой другой элемент в A равен ему.
 --    Докажите, что тип A тривиален тогда и только тогда, когда A является утверждением и A населен.
@@ -32,29 +54,77 @@
 
 \func \infix 1 <-> (A B : \Type) => \Sigma (A -> B) (B -> A)
 
-\func isTriv-lem (A : \Type) : isTriv A <-> (\Sigma (isProp A) A) => {?}
+\func isTriv-lem (A : \Type) : isTriv A <-> (\Sigma (isProp A) A)
+  => (\lam triv => (\lam x y => =-trans (sym (triv.2 x)) (triv.2 y), triv.1), \lam p => (p.2, p.1 p.2))
 
 -- 4. Докажите, что Either не является утверждением в общем случаем.
 
-\func Either-isProp (p : \Pi {A B : \Type} (pA : isProp A) (pB : isProp B) -> isProp (Either A B)) : Empty => {?}
+\func Either-isProp (p : \Pi {A B : \Type} (pA : isProp A) (pB : isProp B) -> isProp (Either A B)) : Empty
+  => true/=false (pmap helper (p Unit-isProp Unit-isProp (inl ()) (inr ())))
+  \where {
+    \func helper (e : Either Unit Unit) : Bool \elim e
+      | inl a => true
+      | inr b => false
+  }
 
 -- 5. Докажите, что LessOrEq и LessOrEq' являются предикатами.
 
-\data LessOrEq (n m : Nat) \with
+\data LessOrEq (n m : Nat) : \Set0 \with
   | 0, m => z<=n
   | suc n, suc m => s<=s (LessOrEq n m)
 
-\data LessOrEq' (n m : Nat) \elim m
+\data LessOrEq' (n m : Nat) : \Set0 \elim m
   | suc m => <=-step (LessOrEq' n m)
   | m => <=-refl (n = m)
 
-\func LessOrEq-isProp {n m : Nat} : isProp (LessOrEq n m) => {?}
+\func LessOrEq-isProp {n m : Nat} : isProp (LessOrEq n m)
+  => \lam x y => helper n m x y
+  \where {
+    \func helper (n m : Nat) (p : LessOrEq n m) (p' : LessOrEq n m) : p = p' \elim n, m, p, p'
+      | 0, 0, z<=n, z<=n => idp
+      | 0, suc n, z<=n, z<=n => idp
+      | suc n, suc n', s<=s l, s<=s l' => pmap s<=s (helper n n' l l')
+  }
 
 -- Для решения LessOrEq'-isProp понадобится тот факт, что Nat является множеством.
 -- Сейчас доказывать это не нужно доказывать, доказательство будет приведено позже.
 \func Nat-isSet : isSet Nat => {?}
 
-\func LessOrEq'-isProp {n m : Nat} : isProp (LessOrEq' n m) => {?}
+\func LessOrEq'-isProp {n m : Nat} : isProp (LessOrEq' n m) => \lam x y => helper n m x y
+  \where {
+    \func helper (n m : Nat) (p : LessOrEq' n m) (p' : LessOrEq' n m) : p = p' \elim n, m, p, p'
+      | 0, 0, <=-refl _x, <=-refl _x' => idp
+      | 0, suc n, <=-step l, <=-step l' => pmap <=-step (helper 0 n l l')
+      | 0, suc n, <=-step l, <=-refl _x => absurd (zero/=suc n _x)
+      | 0, suc n, <=-refl _x, <=-step l => absurd (zero/=suc n _x)
+      | 0, suc n, <=-refl _x, <=-refl _y => absurd (zero/=suc n _x)
+      | suc n, 0, <=-refl _x, <=-refl _y => absurd (zero/=suc n (sym _x))
+      | suc n, suc m, <=-step l, <=-step l' => pmap <=-step (helper (suc n) m l l')
+      | suc n, suc m, <=-step l, <=-refl l' => absurd (helper1 l l')
+      | suc n, suc m, <=-refl p, <=-step p' => absurd (helper1 p' p)
+      | suc n, suc m, <=-refl p, <=-refl p' => pmap <=-refl (equality-isProp Nat-isSet (suc n) (suc m) p p')
+
+    \func desuc (n : Nat) : Nat \elim n
+      | 0 => 0
+      | suc n => n
+
+    \func n/=sucn (x : Nat) (p : x = suc x) : Empty \elim x
+      | 0 => zero/=suc 0 p
+      | suc n => n/=sucn n (pmap desuc p)
+
+    \func helper1 {n m : Nat} (p : LessOrEq' (suc n) m) (p' : suc n = suc m) : Empty \elim n, m, p
+      | 0, 0, <=-refl _x => zero/=suc 0 (sym _x)
+      | 0, suc n, <=-step l => zero/=suc n (pmap desuc p')
+      | 0, suc n, <=-refl _x => zero/=suc n (pmap desuc p')
+      | suc n, 0, <=-refl _x => zero/=suc n (pmap desuc (sym p'))
+      | suc n, suc m, <=-step p => helper1 (helper2 p) (pmap desuc p')
+      | suc n, suc m, <=-refl _x => n/=sucn m (pmap desuc (sym (=-trans (sym p') _x)))
+
+    \func helper2 {n m : Nat} (p : LessOrEq' (suc (suc n)) m) : LessOrEq' (suc n) m \elim m, p
+      | 0, <=-refl _x => absurd (zero/=suc (suc n) (sym _x))
+      | suc m, <=-step p => <=-step (helper2 p)
+      | suc m, <=-refl p => <=-step (<=-refl (pmap desuc p))
+  }
 
 -- 6. Докажте, что ReflClosure LessOrEq не является предикатом, а ReflClosure (\lam x y => T (x < y)) является.
 
@@ -67,10 +137,35 @@
   | refl (x = y)
   | inc (R x y)
 
-\func ReflClosure_<-isProp (n m : Nat) : isProp (ReflClosure (\lam x y => T (x < y)) n m) => {?}
+\func ReflClosure_<-isProp (n m : Nat) : isProp (ReflClosure (\lam x y => T (x < y)) n m)
+  => \lam x y => \case x \as x, y \as y \return x = y \with {
+    | refl x, refl y => pmap refl (equality-isProp Nat-isSet n m x y)
+    | refl x, inc y => absurd (helper x y)
+    | inc x, refl y => absurd (helper y x)
+    | inc x, inc y => pmap inc (helper1 x y)
+  } \where {
+  \func helper {n m : Nat} (p : n = m) (p' : T (n < m)) : Empty \elim n, m
+    | 0, 0 => p'
+    | 0, suc n => zero/=suc n p
+    | suc n, 0 => zero/=suc n (sym p)
+    | suc n, suc m => helper (pmap LessOrEq'-isProp.desuc p) p'
 
-\func ReflClosure_<=-isNotProp (p : \Pi (n m : Nat) -> isProp (ReflClosure LessOrEq n m)) : Empty => {?}
+  \func helper1 {n m : Nat} (p : T (n < m)) (p' : T (n < m)) : p = p' \elim n, m
+    | 0, 0 => absurd p
+    | 0, suc n => idp
+    | suc n, 0 => idp
+    | suc n, suc m => helper1 p p'
+}
+
+\func ReflClosure_<=-isNotProp (p : \Pi (n m : Nat) -> isProp (ReflClosure LessOrEq n m)) : Empty
+  => true/=false (sym (pmap helper (p 0 0 (inc z<=n) (refl idp))))
+  \where {
+      \func helper {n m : Nat} (p : ReflClosure LessOrEq n m) : Bool \elim p
+        | refl _x => true
+        | inc _x => false
+  }
 
 -- 7. Докажите, что если тип A вкладывается в тип B и B является утверждением, то и A является утверждением.
 
-\func sub-isProp {A B : \Type} (f : A -> B) (p : isInj f) (q : isProp B) : isProp A => {?}
+\func sub-isProp {A B : \Type} (f : A -> B) (p : isInj f) (q : isProp B) : isProp A
+  => \lam x y => p x y (q (f x) (f y))
