@@ -1,3 +1,7 @@
+\import hw04 (repl)
+\import hw08
+\import lect05 (funExt)
+\import lect10 (forall-isProp)
 \import lect11
 \import Utils \hiding (inl,inr)
 
@@ -6,6 +10,13 @@
 \data Dec (A : \Prop)
   | yes A
   | no (A -> Empty)
+  \where {
+    \use \level decIsProp {A : \Prop} (d1 d2 : Dec A) : d1 = d2 \elim d1, d2
+      | yes a, yes a' => idp
+      | yes a, no _x => absurd (_x a)
+      | no _x, yes a => absurd (_x a)
+      | no _x, no _x' => idp
+  }
 
 -- \func testDec : \Prop -> \Prop => Dec
 
@@ -13,11 +24,27 @@
 
 \func \infix 1 <-> (A B : \Type) => \Sigma (A -> B) (B -> A)
 
-\func trunc-prop {A : \Prop} : Trunc A <-> A => {?}
+\func trunc-prop {A : \Prop} : Trunc A <-> A => (helper1, trunc)
+\where {
+  \func helper1 {A : \Prop} (t : Trunc A) : A \elim t
+    | trunc a => a
+}
 
 -- 3. Докажите следующий закон де Моргана.
 
-\func deMorgan (A B C : \Prop) : (\Sigma A (B `Or` C)) <-> ((\Sigma A B) `Or` (\Sigma A C)) => {?}
+\func deMorgan (A B C : \Prop) : (\Sigma A (B `Or` C)) <-> ((\Sigma A B) `Or` (\Sigma A C))
+  => (helper, helper1)
+  \where {
+    \func helper {A B C : \Prop} (s : \Sigma A (B `Or` C)) : (\Sigma A B) `Or` (\Sigma A C)
+      => \case s.2 \with {
+        | inl a => inl (s.1, a)
+        | inr b => inr (s.1, b)
+      }
+
+    \func helper1 {A B C : \Prop} (s : (\Sigma A B) `Or` (\Sigma A C)) : \Sigma A (B `Or` C) \elim s
+      | inl a => (a.1, inl a.2)
+      | inr b => (b.1, inr b.2)
+  }
 
 -- 4. Тип С называется когенератором, если для любых множеств A и B и любых функция f,g : A -> B верно, что если h `o` f = h `o` g для всех h : B -> C, то f = g.
 --    Докажите, что \Prop является когенератором.
@@ -26,15 +53,76 @@
 
 \func isCogenerator (C : \Type) => \Pi {A B : \Set} (f g : A -> B) (p : \Pi (h : B -> C) -> h `o` f = h `o` g) -> f = g
 
-\func PropIsCogenerator : isCogenerator \Prop => {?}
+\func PropIsCogenerator : isCogenerator \Prop => \lam {A : \Set} {B : \Set} f g p => funExt {A} (\lam _ => B) {f} {g} (helper f g p)
+\where {
+  \func helper {A B : \Set} (f g : A -> B) (p : \Pi (h : B -> \Prop) -> h `o` f = h `o` g) (x : A) : f x = g x
+    => repl (pmap (\lam (app : A -> \Prop) => app x) (p (pred f x))) idp
+
+  \func pred {A B : \Set} (f : A -> B) (x : A) (y : B) : \Prop
+    => f x = y
+}
 
 -- 5. Определите элиминатор для Or через Or-rec, не используя паттерн матчинг на Or.
 
 \func Or-elim {A B : \Prop} (C : Or A B -> \Prop)
               (f : \Pi (x : A) -> C (inl x)) (g : \Pi (y : B) -> C (inr y))
-              (p : A `Or` B) : C p => {?}
+              (p : A `Or` B) : C p => Or-rec {A} {B} {C p} (helper2 {A} {B} {C} f p) (helper3 {A} {B} {C} g p) p
+    \where {
+      \func helper {A B : \Prop} (x : A) (p : A `Or` B) : inl x = p => idp
+      \func helper1 {A B : \Prop} (x : B) (p : A `Or` B) : inr x = p => idp
+
+      \func helper2 {A B : \Prop} {C : Or A B -> \Prop} (f : \Pi (x : A) -> C (inl x)) (p : A `Or` B) : \Pi (x : A) -> C p
+      => \lam x => transport C (helper x p) (f x)
+
+      \func helper3 {A B : \Prop} {C : Or A B -> \Prop} (f : \Pi (x : B) -> C (inr x)) (p : A `Or` B) : \Pi (x : B) -> C p
+        => \lam x => transport C (helper1 x p) (f x)
+    }
 
 -- 6. Докажите, что n-типы замкнуты относительно образования \Pi-типов.
 --    Hint: Доказательство по индукции. Для случая suc n нужно доказать, что если f,g : \Pi (x : A) -> B x, то f = g эквивалентно \Pi (x : A) -> f x = g x.
 
-\func levelPi {A : \Type} (B : A -> \Type) (n : Nat) (p : \Pi (x : A) -> B x `hasLevel` n) : (\Pi (x : A) -> B x) `hasLevel` n => {?}
+\record Bijection (E F : \Type)
+  | eq : E <-> F
+  | inj : \Pi (x y : E) -> ((x = y) -> Empty) -> (eq.1 x = eq.1 y) -> Empty
+  | surj : \Pi (y : F) -> \Sigma (x : E) (eq.1 x = y)
+
+\func inv {A B : \Type} {b : Bijection A B} (x : A) : b.eq.2 (b.eq.1 x) = x
+  => {?}
+
+\func levelPi {A : \Type} (B : A -> \Type) (n : Nat) (p : \Pi (x : A) -> B x `hasLevel` n) : (\Pi (x : A) -> B x) `hasLevel` n \elim n
+  | 0 => forall-isProp B p
+  | suc n => \lam f g => \let pr => eq {A} {B} f g
+                         \in
+    levelPi (\lam (x : A) => f x = g x) n (\lam x => p x (f x) (g x))
+\where {
+  \func helper {A : \Type} (B : A -> \Type) (f g : \Pi (x : A) -> B x) : Bijection (f = g) (\Pi (x : A) -> f x = g x)
+    => \let eq => eq {A} {B} f g \in
+      \new Bijection { | eq => eq
+                       | inj => \lam x y p contra => p (helper1' {A} {B} f g x y contra)
+                       | surj => \lam y => \let xx => funExt B {f} {g} y \in (xx, idp)
+      }
+
+  \func eq {A : \Type} {B : A -> \Type} (f g : \Pi (x : A) -> B x) : (f = g) <-> (\Pi (x : A) -> f x = g x)
+    => (\lam p => helper1 {A} {B} f g p, \lam f' => funExt B {f} {g} f')
+
+  \func helper1 {A : \Type} {B : A -> \Type} (f g : \Pi (x : A) -> B x) (x : f = g) : \Pi (x : A) -> f x = g x
+    => \lam x' => path (\lam i => (x @ i) x')
+
+  \func helper1' {A : \Type} {B : A -> \Type} (f g : \Pi (x : A) -> B x) (x y : f = g) (p : helper1 {A} {B} f g x = helper1 {A} {B} f g y) : x = y
+    => path (\lam i => funExt B (p @ i))
+
+  \func helper2 {A B : \Type} {n : Nat} (b : Bijection A B) (p : A `hasLevel` n) : B `hasLevel` n \elim n
+    | 0 => \lam x y => \let | xx => b.surj x
+                            | yy => b.surj y
+                                        \in =-trans (=-trans (sym xx.2) (pmap b.eq.1 (p xx.1 yy.1))) yy.2
+    | suc n => \lam x y => \let | xx => b.surj x
+                                | yy => b.surj y
+      \in helper2 {xx.1 = yy.1} {x = y} {n} (helper2' b xx.1 yy.1 x y xx.2 yy.2) (p xx.1 yy.1)
+
+    \func helper2' {A B : \Type} (b : Bijection A B) (x y : A) (x' y' : B) (px : b.eq.1 x = x') (py : b.eq.1 y = y') : Bijection (x = y) (x' = y')
+      => \new Bijection (x = y) (x' = y') {
+        | eq => (\lam t => =-trans (=-trans (sym px) (pmap b.eq.1 t)) py, \lam t => pmap b.eq.2 (=-trans (=-trans px t) (sym py)))
+        | inj => \lam xt yt => {?}
+        | surj => {?}
+      }
+}
