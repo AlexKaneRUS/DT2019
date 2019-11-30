@@ -83,27 +83,29 @@
 
 \record Bijection (E F : \Type)
   | eq : E <-> F
-  | inj : \Pi (x y : E) -> ((x = y) -> Empty) -> (eq.1 x = eq.1 y) -> Empty
+  | inv : \Pi (x : E) -> eq.2 (eq.1 x) = x
   | surj : \Pi (y : F) -> \Sigma (x : E) (eq.1 x = y)
+--  | inj : \Pi (x y : E) -> ((x = y) -> Empty) -> (eq.1 x = eq.1 y) -> Empty
 
-\func inv {A B : \Type} {b : Bijection A B} (x : A) : b.eq.2 (b.eq.1 x) = x
-  => {?}
+--\func inv {A B : \Type} {b : Bijection A B} (x : A) : b.eq.2 (b.eq.1 x) = x
+--  => {?}
 
 \func levelPi {A : \Type} (B : A -> \Type) (n : Nat) (p : \Pi (x : A) -> B x `hasLevel` n) : (\Pi (x : A) -> B x) `hasLevel` n \elim n
   | 0 => forall-isProp B p
-  | suc n => \lam f g => \let pr => eq {A} {B} f g
+  | suc n => \lam f g => \let pr => eqProof {A} {B} f g
                          \in
-    levelPi (\lam (x : A) => f x = g x) n (\lam x => p x (f x) (g x))
+    helper2 {(\Pi (x : A) -> f x = g x)} {f = g} {n} (helper {A} B f g) (levelPi (\lam (x : A) => f x = g x) n (\lam x => p x (f x) (g x)))
 \where {
-  \func helper {A : \Type} (B : A -> \Type) (f g : \Pi (x : A) -> B x) : Bijection (f = g) (\Pi (x : A) -> f x = g x)
-    => \let eq => eq {A} {B} f g \in
+  \func helper {A : \Type} (B : A -> \Type) (f g : \Pi (x : A) -> B x) : Bijection (\Pi (x : A) -> f x = g x) (f = g)
+    => \let eq => eqProof {A} {B} f g \in
       \new Bijection { | eq => eq
-                       | inj => \lam x y p contra => p (helper1' {A} {B} f g x y contra)
-                       | surj => \lam y => \let xx => funExt B {f} {g} y \in (xx, idp)
+                       | inv => \lam x => idp
+                       | surj => \lam y => \let xx => helper1 {A} {B} f g y \in (xx, idp)
+--                       | inj => \lam x y p contra => p (helper1' {A} {B} f g x y contra)
       }
 
-  \func eq {A : \Type} {B : A -> \Type} (f g : \Pi (x : A) -> B x) : (f = g) <-> (\Pi (x : A) -> f x = g x)
-    => (\lam p => helper1 {A} {B} f g p, \lam f' => funExt B {f} {g} f')
+  \func eqProof {A : \Type} {B : A -> \Type} (f g : \Pi (x : A) -> B x) : (\Pi (x : A) -> f x = g x) <-> (f = g)
+    => (\lam f' => funExt B {f} {g} f', \lam p => helper1 {A} {B} f g p)
 
   \func helper1 {A : \Type} {B : A -> \Type} (f g : \Pi (x : A) -> B x) (x : f = g) : \Pi (x : A) -> f x = g x
     => \lam x' => path (\lam i => (x @ i) x')
@@ -119,10 +121,19 @@
                                 | yy => b.surj y
       \in helper2 {xx.1 = yy.1} {x = y} {n} (helper2' b xx.1 yy.1 x y xx.2 yy.2) (p xx.1 yy.1)
 
-    \func helper2' {A B : \Type} (b : Bijection A B) (x y : A) (x' y' : B) (px : b.eq.1 x = x') (py : b.eq.1 y = y') : Bijection (x = y) (x' = y')
-      => \new Bijection (x = y) (x' = y') {
-        | eq => (\lam t => =-trans (=-trans (sym px) (pmap b.eq.1 t)) py, \lam t => pmap b.eq.2 (=-trans (=-trans px t) (sym py)))
-        | inj => \lam xt yt => {?}
-        | surj => {?}
-      }
+  \func helper2' {A B : \Type} (b : Bijection A B) (x y : A) (x' y' : B) (px : b.eq.1 x = x') (py : b.eq.1 y = y') : Bijection (x = y) (x' = y')
+    => \new Bijection (x = y) (x' = y') {
+      | eq => (helper2'' px py, helper2''' px py)
+      | inv => \lam t => {?}
+      | surj => \lam t => \let xx => helper2''' px py t \in (xx, {?})
+    }
+
+  \func helper2'' {A B : \Type} {b : Bijection A B} {x y : A} {x' y' : B} (px : b.eq.1 x = x') (py : b.eq.1 y = y') (pp : x = y) : x' = y'
+    => =-trans (=-trans (sym px) (pmap b.eq.1 pp)) py
+
+  \func helper2''' {A B : \Type} {b : Bijection A B} {x y : A} {x' y' : B} (px : b.eq.1 x = x') (py : b.eq.1 y = y') (pp : x' = y') : x = y
+    => =-trans (=-trans (sym (b.inv x)) (pmap b.eq.2 (=-trans (=-trans px pp) (sym py)))) (b.inv y)
+
+  \func aux {A B : \Type} {b : Bijection A B} {x y : A} {x' y' : B} {px : b.eq.1 x = x'} {py : b.eq.1 y = y'} (t : x = y) : helper2''' px py (helper2'' px py t) = t
+    => {?}
 }
