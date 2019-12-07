@@ -108,10 +108,6 @@
       | 0 => 0
       | suc n => n
 
-    \func n/=sucn (x : Nat) (p : x = suc x) : Empty \elim x
-      | 0 => zero/=suc 0 p
-      | suc n => n/=sucn n (pmap desuc p)
-
     \func helper1 {n m : Nat} (p : LessOrEq' (suc n) m) (p' : suc n = suc m) : Empty \elim n, m, p
       | 0, 0, <=-refl _x => zero/=suc 0 (sym _x)
       | 0, suc n, <=-step l => zero/=suc n (pmap desuc p')
@@ -125,6 +121,11 @@
       | suc m, <=-step p => <=-step (helper2 p)
       | suc m, <=-refl p => <=-step (<=-refl (pmap desuc p))
   }
+
+
+\func n/=sucn (x : Nat) (p : x = suc x) : Empty \elim x
+  | 0 => zero/=suc 0 p
+  | suc n => n/=sucn n (pmap LessOrEq'-isProp.desuc p)
 
 -- 6. Докажте, что ReflClosure LessOrEq не является предикатом, а ReflClosure (\lam x y => T (x < y)) является.
 

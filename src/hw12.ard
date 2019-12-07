@@ -1,14 +1,34 @@
+\import Utils (Empty, List, absurd, cons, false, idp, pmap, sym, transport, true)
+\import hw04 (repl)
+\import hw05 (zero/=suc)
+\import hw06
+\import hw10 (<)
+\import lect02 (-, id)
+\import lect05 (funExt, true/=false)
+\import lect10 (funcExt)
+\import lect11 (Unit)
 \import lect12
 
 -- 1. Определите функцию negPred : Int -> Int такую, что negPred x = x, если x > 0, и negPred x = x - 1, если x <= 0.
 
-\func negPred (x : Int) : Nat => {?}
+\func negPred (x : Int) : Int \elim x
+  | pos (suc n) => pos (suc n)
+  | pos 0       => neg 1
+  | neg (suc n) => neg (suc (suc n))
 
 -- 2. Определите функции сложения и умножения для Int.
 
-\func \infixl 6 + (x y : Int) : Int => {?}
+\func \infixl 6 + (x y : Int) : Int \elim x, y
+  | pos x, pos y => pos (x Nat.+ y)
+  | pos x, neg (suc y) => if (x < suc y) (neg (suc y - x)) (pos (x - suc y))
+  | neg (suc x), pos y => if (y < suc x) (neg (suc x - y)) (pos (y - suc x))
+  | neg (suc x), neg (suc y) => neg (suc x Nat.+ suc y)
 
-\func \infixl 7 * (x y : Int) : Int => {?}
+\func \infixl 7 * (x y : Int) : Int \elim x, y
+  | pos x, pos y => pos (x Nat.* y)
+  | neg (suc x), neg (suc y) => pos (suc x Nat.* suc y)
+  | neg (suc x), pos y => neg (suc x Nat.* y)
+  | pos x, neg (suc y) => neg (x Nat.* suc y)
 
 -- 3. Определите тип данных BinNat для бинарных натуральных чисел.
 --    У него должно быть три конструктора: для 0, для чисел вида 2*n и чисел вида 2*n+1.
@@ -16,6 +36,11 @@
 --    Используйте типы данных с условиями, чтобы вычислительно отождествить различные нули.
 
 \data BinNat
+  | bi-zero
+  | bi-two (n : BinNat) \elim n {
+    | bi-zero => bi-zero
+  }
+  | bi-two-plus-one (n : BinNat)
 
 -- 4. Докажите, что функция pred сюръективна.
 
@@ -23,13 +48,13 @@
   | 0 => 0
   | suc n => n
 
-\func pred-is-sur : isSur pred => {?}
+\func pred-is-sur : isSur pred => \lam y => in (suc y, idp)
 
 -- 5. Докажите, что функция suc не сюръективна.
 
-\data Empty
-
-\func suc-is-not-sur (p : isSur suc) : Empty => {?}
+\func suc-is-not-sur (p : isSur suc) : Empty => \case p 0 \with {
+  | in a => zero/=suc a.1 (sym a.2)
+}
 
 -- 6. Пусть f : A -> B и g : B -> C ─ некоторые функции.
 --    Докажите, что если f и g сюръективны, то g `o` f также сюръективна.
@@ -37,13 +62,25 @@
 
 \func \fixr 9 o {A B C : \Type} (g : B -> C) (f : A -> B) => \lam a => g (f a)
 
-\func o-sur {A B C : \Type} (f : A -> B) (g : B -> C) (p : isSur f) (q : isSur g) : isSur (g `o` f) => {?}
+\func o-sur {A B C : \Type} (f : A -> B) (g : B -> C) (p : isSur f) (q : isSur g) : isSur (g `o` f)
+  => \lam y => \case q y \with {
+    | in (a1, a2) => \case p a1 \with {
+      | in (a'1, a'2) => in (a'1, =-trans (pmap g a'2) a2)
+    }
+  }
 
-\func o-sur' {A B C : \Type} (f : A -> B) (g : B -> C) (p : isSur (g `o` f)) : isSur g => {?}
+\func o-sur' {A B C : \Type} (f : A -> B) (g : B -> C) (p : isSur (g `o` f)) : isSur g
+  => \lam y => \case p y \with {
+    | in (a1, a2) => in (f a1, a2)
+  }
 
 -- 7. Определите множество конечных подмножеств множества A, то есть списков элементов A с точностью до перестановок и повторений элементов.
 
-\data Set (A : \Set) : \Set
+\data SubsetProp {A : \Type} (xs : List A) (ys : List A) : \Prop
+  | only (\Pi (x : A) -> In x xs -> Trunc (In x ys)) (\Pi (x : A) -> In x ys -> Trunc (In x xs))
+
+\func Set (A : \Set) : \Set
+  => Quotient (List A) SubsetProp
 
 -- 8. Докажите, что функция является биекцией тогда и только тогда, когда она является инъекцией и сюръекцией.
 
@@ -51,11 +88,28 @@
 
 \func \infix 1 <-> (A B : \Type) => \Sigma (A -> B) (B -> A)
 
-\func isBij=isInj+isSur {A B : \Set} (f : A -> B) : isBij f <-> (\Sigma (isInj f) (isSur f)) => {?}
+\func isBij=isInj+isSur {A B : \Set} (f : A -> B) : isBij f <-> (\Sigma (isInj f) (isSur f))
+  => (\lam isbij => \case isbij \with {
+    | (g, p, q) => (\lam x y p' => =-trans (=-trans (sym (p x)) (pmap g p')) (p y),
+                    \lam x => in (g x, q x))
+  } , \lam isinjsurj => \case isinjsurj \with {
+    | (inj, surj) => (\lam b => (Trunc-elim (helper {A} {B} {f} b inj surj) (\lam t => t) (surj b)).1,
+                      \lam x => \let p => (Trunc-elim (helper {A} {B} {f} (f x) inj surj) (\lam t => t) (surj (f x))) \in inj (p.1) x p.2,
+                      \lam y => \let p => (Trunc-elim (helper {A} {B} {f} y inj surj) (\lam t => t) (surj y)) \in p.2)
+  })
+  \where {
+    \func helper {A B : \Set} {f : A -> B} (b : B) (inj : isInj f) (surj : isSur f) : isProp (\Sigma (x : A) (f x = b))
+      => \lam t t' => sigmaInc (\lam x => f x = b) t t' (inj t.1 t'.1 (t.2 `=-trans` (sym t'.2)))
+  }
 
 -- 9. Если B x является множеством, то \Pi (x : A) -> B x тоже является множеством.
 
-\func pi-isSet {A : \Type} (B : A -> \Type) (p : \Pi (x : A) -> isSet (B x)) : isSet (\Pi (x : A) -> B x) => {?}
+\func pi-isSet {A : \Type} (B : A -> \Type) (p : \Pi (x : A) -> isSet (B x)) : isSet (\Pi (x : A) -> B x)
+  => SetLemma (\lam (f : \Pi (x : A) -> B x) g => \Pi (a : A) -> f a = g a)
+              (\lam f g a b => funExt {A} (\lam t => f t = g t) {a} {b} (\lam t => p t (f t) (g t) (a t) (b t)))
+              (\lam f x => idp)
+              (\lam t => funExt B t)
+--  => \lam f g x y => funExt {A} B {f} {g} (\lam a => p a (f a) (g a) (pmap (\lam t => t a) x) (pmap (\lam t => t a) y))
 
 -- 10. Если A и B являются множествами, то A `Or` B тоже является множеством.
 
@@ -63,7 +117,46 @@
   | inl A
   | inr B
 
-\func or-isSet {A B : \Type} (p : isSet A) (q : isSet B) : isSet (Or A B) => {?}
+\func or-isSet {A B : \Type} (p : isSet A) (q : isSet B) : isSet (Or A B)
+  => SetLemma (\lam (l : Or A B) r => \case l, r \with {
+                | inl a, inl a' => a = a'
+                | inl a, inr b => Empty
+                | inr b, inl a => Empty
+                | inr b, inr b' => b = b'
+              })
+              (\lam x y => \case x \as x, y \as y \return (isProp (\case x, y \with {
+                | inl a, inl a' => a = a'
+                | inl a, inr _ => Empty
+                | inr b, inl _ => Empty
+                | inr b, inr b' => b = b'
+              })) \with {
+                | inl a, inl a' => p a a'
+                | inl a, inr b => \lam _ _ => idp
+                | inr b, inl a => \lam _ _ => idp
+                | inr b, inr b' => q b b'
+              })
+              (\lam x => \case x \as x, x \return (\case x, x \with {
+                | inl a, inl a' => a = a'
+                | inl a, inr _ => Empty
+                | inr b, inl _ => Empty
+                | inr b, inr b' => b = b'
+              }) \with {
+                | inl a, inl a' => idp
+                | inl a, inr b => idp
+                | inr b, inl a => idp
+                | inr b, inr b' => idp
+              })
+              (\lam {x} {y} t => \case x \as x', y \as y', t : (\case x', y' \with {
+                | inl a, inl a' => a = a'
+                | inl a, inr b => Empty
+                | inr b, inl a => Empty
+                | inr b, inr b' => b = b'
+              }), idp : x = x', idp : y = y'  \with {
+                | inl a, inl a', p1, p2, p3 => p2 `=-trans` pmap inl p1 `=-trans` (sym p3)
+                | inl a, inr b, p1, p2, p3 => absurd p1
+                | inr b, inl a, p1, p2, p3 => absurd p1
+                | inr b, inr b', p1, p2, p3 => p2 `=-trans` pmap inr p1 `=-trans` (sym p3)
+              })
 
 -- 11. Докажите теорему Кантора.
 
@@ -79,17 +172,60 @@
 -- Докажите теорему Кантора.
 
 \func cantor1 (A : \Set) : \Sigma (f : A -> Subs A) (isInj f)
-  => {?}
+  => (\lam x a => a = x, \lam x y p => repl (pmap (\lam t => t x) p) idp)
+
+\func lemma {x : \Prop} (p : x <-> (x -> Empty)) : Empty
+  => p.1 (p.2 (\lam t => p.1 t t)) (p.2 (\lam t => p.1 t t))
 
 \func cantor2 (A : \Set) (f : A -> Subs A) (p : isSur f) : Empty
-  => {?}
+  => \case p (\lam a => f a a -> Empty) \with {
+    | in a => lemma {f a.1 a.1} (\lam t1 t2 => repl (pmap (\lam t' => t' a.1) a.2) t1 t2
+    , \lam t1 => repl (sym (pmap (\lam t' => t' a.1) a.2)) t1)
+  }
 
 -- 11. Постройте функции Nat -> BinNat и BinNat -> Nat и докажите, что они взаимно обратны.
 
-\func NatToBinNat (n : Nat) : BinNat => {?}
+\func succBin (n : BinNat) : BinNat
+  \elim n
+    | bi-zero => bi-two-plus-one bi-zero
+    | bi-two n => bi-two-plus-one n
+    | bi-two-plus-one n => bi-two (succBin n)
 
-\func BinNatToNat (b : BinNat) : Nat => {?}
+\func NatToBinNat (n : Nat) : BinNat \elim n
+  | 0 => bi-zero
+  | suc n => succBin (NatToBinNat n)
 
-\func nbn (n : Nat) : BinNatToNat (NatToBinNat n) = n => {?}
+\func BinNatToNat (b : BinNat) : Nat \elim b
+  | bi-zero => 0
+  | bi-two n => 2 Nat.* BinNatToNat n
+  | bi-two-plus-one n => suc (2 Nat.* BinNatToNat n)
 
-\func bnb (b : BinNat) : NatToBinNat (BinNatToNat b) = b => {?}
+\func nbn (n : Nat) : BinNatToNat (NatToBinNat n) = n \elim n
+  | 0 => idp
+  | suc n => sym (helper {NatToBinNat n}) `=-trans` pmap suc (nbn n)
+  \where {
+    \func helper {b : BinNat} : suc (BinNatToNat b) = BinNatToNat (succBin b) \elim b
+      | bi-zero => idp
+      | bi-two n => idp
+      | bi-two-plus-one n => pmap (\lam t => 2 Nat.* t) (helper {n})
+  }
+
+\func bnb (b : BinNat) : NatToBinNat (BinNatToNat b) = b \elim b
+  | bi-zero => idp
+  | bi-two n => helper `=-trans` pmap bi-two (bnb n)
+  | bi-two-plus-one n => helper3
+  \where {
+    \func helper {n : Nat} : NatToBinNat (2 Nat.* n) = bi-two (NatToBinNat n) \elim n
+      | 0 => idp
+      | suc n => helper1
+
+    \func helper1 {n : Nat} : succBin (succBin (NatToBinNat (2 Nat.* n))) = bi-two (succBin (NatToBinNat n)) \elim n
+      | 0 => idp
+      | suc n => pmap succBin (pmap succBin (helper1 {n}))
+
+    \func helper3 {n : BinNat} : succBin (NatToBinNat (2 Nat.* BinNatToNat n)) = bi-two-plus-one n \elim n
+      | bi-zero => idp
+      | bi-two n => pmap succBin (helper {2 Nat.* BinNatToNat n}) `=-trans` pmap bi-two-plus-one helper
+                         `=-trans` pmap (\lam t => bi-two-plus-one (bi-two t)) (bnb n)
+      | bi-two-plus-one n => pmap succBin (pmap succBin (pmap succBin (helper {2 Nat.* BinNatToNat n}))) `=-trans` pmap bi-two-plus-one helper3
+  }
