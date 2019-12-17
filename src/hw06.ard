@@ -51,7 +51,7 @@
 
 -- 4. Докажите эквивалентность четырех различных определений LessOrEq: lessOrEq, lessOrEq', LessOrEq и LessOrEq'.
 
-\func +-comm (n m : Nat) : n + m = m + n
+\func +-comm (n m : Nat) : n Nat.+ m = m Nat.+ n
   | 0, 0 => idp
   | 0, suc m => pmap suc (+-comm 0 m)
   | suc n, 0 => pmap suc (+-comm n 0)

@@ -1,15 +1,120 @@
+\import hw04 (repl)
+\import hw08 (=-trans)
+\import hw12
+\import lect05 (funExt)
+\import lect10 (Impl-isProp)
+\import lect12 (sigma-isProp)
 \import lect13
 \import Utils
 
 -- 1. Докажите, что тип утверждений является множеством.
 
-\func prop-isSet : isSet \Prop => {?}
+\func prop-isSet : isSet \Prop => \lam P Q => repl (sym (pmap isProp (equivalence=>equality (P = Q) (P <-> Q) helper))) helper1
+   \where {
+     \func helper {P Q : \Prop} : Equiv (P = Q) (P <-> Q)
+       => (\lam peq => \let x => equality=>equivalence P Q peq \in (x.1, x.2),
+           \lam peq => equivalence=>equality P Q (peq.1, peq.2, \lam x => idp, \lam x => idp),
+           \lam x => (UA P Q).3 x,
+           \lam x1 => pmap (\lam t => (t.1, t.2)) ((UA P Q).4 (x1.1, x1.2 , \lam _ => idp, \lam _ => idp)))
+
+     \func helper1 {P Q : \Prop} : isProp (P <-> Q)
+       => sigma-isProp {P -> Q} (\lam _ => Q -> P) (Impl-isProp {P} {Q} (\lam x y => idp)) (\lam _ => Impl-isProp {Q} {P} (\lam x y => idp))
+   }
 
 -- 2. Докажите, что (Bool = Bool) = Bool.
 
-\func BoolAut : (Bool = Bool) = Bool => {?}
+\func BoolAut : (Bool = Bool) = Bool
+  => helper2 BoolAutHelper
+  \where {
+    \func helper2 {A B C : \Type} (e : Equiv (Equiv A B) C) : (A = B) = C
+      => equivalence=>equality (A = B) C (\lam x => e.1 (equality=>equivalence A B x),
+          \lam x => equivalence=>equality A B (e.2 x),
+          \lam p => pmap (equivalence=>equality A B) (e.3 (equality=>equivalence A B p)),
+          \lam p => pmap e.1 (UA.RLR A B (e.2 p)) `=-trans` e.4 p)
+
+    \func BoolAutHelper : Equiv (Equiv Bool Bool) Bool
+      => (\lam p => p.1 true, \lam b => \case b \with {
+        | true => (\lam x => x, \lam x => x, \lam _ => idp, \lam _ => idp)
+        | false => (not, not, not-not, not-not)
+      }, \lam p => \case p.1 true \as b, idp : p.1 true = b \return ((\case b \return Equiv Bool Bool \with {
+      | true => (\lam x => x, \lam x => x, \lam _x => idp, \lam _x => idp)
+      | false => (not, not, not-not, not-not)
+      }) = p) \with {
+        | true, pp => sym (lemma p (\lam x => x, \lam x => x, \lam _x => idp, \lam _x => idp) (funExt (\lam _ => Bool) {p.1} {\lam x => x} (\lam x => \case x \as b \return p.1 b = b \with {
+          | true => pp
+          | false => \case p.1 false \as b, idp : p.1 false = b \with {
+            | true, pp' => absurd (true/=false (sym (p.3 true) `=-trans` pmap p.2 (pp `=-trans` sym pp') `=-trans` p.3 false))
+            | false, pp' => pp'
+          }
+        })))
+        | false, pp => sym (lemma p (not, not, not-not, not-not) (funExt (\lam _ => Bool) {p.1} {not} (\lam x => \case x \as b \return p.1 b = not b \with {
+          | true => pp
+          | false => \case p.1 false \as b, idp : p.1 false = b \with {
+            | true, pp' => pp'
+            | false, pp' => absurd (true/=false (sym (p.3 true) `=-trans` pmap p.2 (pp `=-trans` sym pp') `=-trans` p.3 false))
+          }
+        })))
+      }, \lam b => \case b \as b' \return ((\case b' \return Equiv Bool Bool \with {
+        | true => (\lam x => x, \lam x => x, \lam _x => idp, \lam _x => idp)
+        | false => (not, not, not-not, not-not)
+      }).1 true = b') \with {
+        | true => idp
+        | false => idp
+      })
+
+    \func lemma {A B : \Set} (e e' : Equiv A B) (p : e.1 = e'.1) : e = e'
+      => path (\lam i => (p @ i, \lam x => helper e e' p x @ i,
+                          \lam x => F' {\lam i => helper e e' p ((@) p i x) @ i = x} (e.3 x) (e'.3 x) @ i,
+                          \lam x => F' {\lam i => (@) p i (helper e e' p x @ i) = x} (e.4 x) (e'.4 x) @ i))
+
+    \func helper {A B : \Type} (e e' : Equiv A B) (p : e.1 = e'.1) (x : B) : e.2 x = e'.2 x
+      => \let xx => pmap (\lam t => e.2 (t (e'.2 x))) p \in
+        sym (sym (e.3 (e'.2 x)) *> xx *> pmap e.2 (e'.4 x))
+
+
+    \func F' {A : I -> \Prop} (a : A left) (a' : A right) : Path A a a'
+      => path (coe A a)
+  }
 
 -- 3. Докажите, что (n+m)-элементное множество равно размеченному объединению n- и m-элементных множеств.
+
+\data NElemSet (n : Nat) : \Set \elim n
+  | suc n => sil (\Sigma)
+  | suc n => sir (NElemSet n)
+
+\func setEq {n m : Nat} : NElemSet (n Nat.+ m) = Or (NElemSet n) (NElemSet m)
+  => equivalence=>equality (NElemSet (n Nat.+ m)) (Or (NElemSet n) (NElemSet m))
+                           (helper, helper2, {?}, {?})
+  \where {
+    \func +-comm (n m : Nat) : n Nat.+ m = m Nat.+ n
+      | 0, 0 => idp
+      | 0, suc m => pmap suc (+-comm 0 m)
+      | suc n, 0 => pmap suc (+-comm n 0)
+      | suc n, suc m => pmap suc (+-comm (suc n) m *> pmap suc (sym (+-comm n m)) *> +-comm n (suc m))
+
+    \func helper {n m : Nat} (s : NElemSet (n Nat.+ m)) : Or (NElemSet n) (NElemSet m) \elim n
+      | 0 => inr (repl (pmap NElemSet (sym (+-comm m 0))) s)
+      | suc n => \case repl (pmap NElemSet (+-comm (suc n) m)) s \with {
+        | sil l => inl (sil l)
+        | sir r => \case helper {n} {m} (repl (pmap NElemSet (+-comm m n)) r) \with {
+          | inl a => inl (sir a)
+          | inr b => inr b
+        }
+      }
+
+    \func helper2 {n m : Nat} (s : Or (NElemSet n) (NElemSet m)) : NElemSet (n Nat.+ m) \elim n, s
+      | 0, inl s => \case s \with {}
+      | 0, inr s => repl (pmap NElemSet (sym (+-comm 0 m))) s
+      | suc n, inl s => \case s \with {
+        | sil a => repl (pmap NElemSet (sym (+-comm (suc n) m))) (sil a)
+        | sir b => repl (pmap NElemSet (sym (+-comm (suc n) m))) (sir (repl (pmap NElemSet (+-comm n m)) (helper2 {n} {m} (inl b))))
+      }
+      | suc n, inr s => repl (pmap NElemSet (sym (+-comm (suc n) m))) (sir (repl (pmap NElemSet (+-comm n m)) (helper2 {n} {m} (inr s))))
+
+    \func helper3 {n m : Nat} (s : NElemSet (n Nat.+ m)) : helper2 (helper s) = s \elim n
+      | 0 => {?}
+      | suc n => {?}
+  }
 
 -- 4. Тип X называется инъективным, если для любой функции f : A -> X и любой инъекции i : A -> B сущесвует функция l : B -> X такая, что l `o` i = f.
 --    Докажите, что \Prop инъективен.
