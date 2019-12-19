@@ -3,6 +3,7 @@
 \import hw12
 \import lect05 (funExt)
 \import lect10 (Impl-isProp)
+\import lect11 (Prop2-to-Prop1)
 \import lect12 (sigma-isProp)
 \import lect13
 \import Utils
@@ -84,7 +85,7 @@
 
 \func setEq {n m : Nat} : NElemSet (n Nat.+ m) = Or (NElemSet n) (NElemSet m)
   => equivalence=>equality (NElemSet (n Nat.+ m)) (Or (NElemSet n) (NElemSet m))
-                           (helper, helper2, {?}, {?})
+                           (helper, helper2, helper3, helper4)
   \where {
     \func +-comm (n m : Nat) : n Nat.+ m = m Nat.+ n
       | 0, 0 => idp
@@ -92,28 +93,87 @@
       | suc n, 0 => pmap suc (+-comm n 0)
       | suc n, suc m => pmap suc (+-comm (suc n) m *> pmap suc (sym (+-comm n m)) *> +-comm n (suc m))
 
-    \func helper {n m : Nat} (s : NElemSet (n Nat.+ m)) : Or (NElemSet n) (NElemSet m) \elim n
-      | 0 => inr (repl (pmap NElemSet (sym (+-comm m 0))) s)
-      | suc n => \case repl (pmap NElemSet (+-comm (suc n) m)) s \with {
-        | sil l => inl (sil l)
-        | sir r => \case helper {n} {m} (repl (pmap NElemSet (+-comm m n)) r) \with {
-          | inl a => inl (sir a)
-          | inr b => inr b
+    \func helper {n m : Nat} (s : NElemSet (n Nat.+ m)) : Or (NElemSet n) (NElemSet m) \elim m
+      | 0 => inl s
+      | suc m => \case s \with {
+        | sil l => inr (sil l)
+        | sir r => \case helper {n} {m} r \with {
+          | inl a => inl a
+          | inr b => inr (sir b)
         }
       }
 
-    \func helper2 {n m : Nat} (s : Or (NElemSet n) (NElemSet m)) : NElemSet (n Nat.+ m) \elim n, s
-      | 0, inl s => \case s \with {}
-      | 0, inr s => repl (pmap NElemSet (sym (+-comm 0 m))) s
-      | suc n, inl s => \case s \with {
-        | sil a => repl (pmap NElemSet (sym (+-comm (suc n) m))) (sil a)
-        | sir b => repl (pmap NElemSet (sym (+-comm (suc n) m))) (sir (repl (pmap NElemSet (+-comm n m)) (helper2 {n} {m} (inl b))))
+    \func helper2 {n m : Nat} (s : Or (NElemSet n) (NElemSet m)) : NElemSet (n Nat.+ m) \elim m, s
+      | 0, inl s => s
+      | 0, inr s => \case s \with {}
+      | suc m, inl s => sir (helper2 {n} {m} (inl s))
+      | suc m, inr s => \case s \with {
+        | sil a => sil a
+        | sir b => sir (helper2 {n} {m} (inr b))
       }
-      | suc n, inr s => repl (pmap NElemSet (sym (+-comm (suc n) m))) (sir (repl (pmap NElemSet (+-comm n m)) (helper2 {n} {m} (inr s))))
 
-    \func helper3 {n m : Nat} (s : NElemSet (n Nat.+ m)) : helper2 (helper s) = s \elim n
-      | 0 => {?}
-      | suc n => {?}
+    \func helper3 {n m : Nat} (s : NElemSet (n Nat.+ m)) : helper2 (helper s) = s \elim m
+      | 0 => idp
+      | suc m => \case s \as s \return (helper2 (\case s \with {
+        | sil l => inr (sil l)
+        | sir r => \case helper r \with {
+          | inr b => inr (sir b)
+          | inl a => inl a
+        }
+      }) = s) \with {
+        | sil a => idp
+        | sir b => \case helper b \as hb, idp : helper b = hb  \return (helper2 (\case hb \with {
+          | inr b => inr (sir b)
+          | inl a => inl a
+        }) = sir b) \with {
+          | inl a', pp => sym (pmap sir (sym (helper3 b) `=-trans` pmap helper2 pp))
+          | inr b', pp => sym (pmap sir (sym (helper3 b) `=-trans` pmap helper2 pp))
+        }
+      }
+
+    \func deinl {A B : \Type} (a : A) (x : Or A B) : A \elim x
+      | inl a' => a'
+      | inr b => a
+
+    \func helper4 {n m : Nat} (s : Or (NElemSet n) (NElemSet m)) : helper (helper2 s) = s \elim m, s
+      | 0, inl a => idp
+      | 0, inr b => \case b \with {}
+      | suc m, inl a => \let ppp => helper4 {n} {m} (inl a) \in
+        \case helper (helper2 (inl a)) \as s, idp : s = helper (helper2 (inl a)) \return ((\case s \with {
+        | inr b => inr (sir b)
+        | inl a => inl a
+      }) = inl a) \with {
+        | inl a', pp => pmap inl (pmap (deinl {NElemSet n} {NElemSet m} a) (sym (sym ppp `=-trans` sym pp)))
+        | inr b', pp => absurd (true/=false (pmap (\lam t => \case t \with {
+          | inl a => false
+          | inr b => true
+        }) (sym (sym ppp `=-trans` sym pp))))
+      }
+      | suc m, inr b => \case b \as b \return ((\case \case b \return NElemSet (n Nat.+ suc m) \with {
+                                                        | sil a => sil a
+                                                        | sir b => sir (helper2 (inr b))
+                                                      } \with {
+        | sil l => inr (sil l)
+        | sir r => \case helper r \with {
+          | inr b => inr (sir b)
+          | inl a => inl a
+        }
+      }) = inr b) \with {
+        | sil aa => idp
+        | sir bb => \let ppp => helper4 {n} {m} (inr bb) \in \case helper {n} (helper2 (inr bb)) \as sss, idp : sss = helper (helper2 (inr bb)) \return ((\case sss \with {
+          | inr b => inr (sir b)
+          | inl a => inl a
+        }) = inr (sir bb)) \with {
+          | inl aa', pp => absurd (true/=false (pmap (\lam t => \case t \with {
+            | inl a => true
+            | inr b => false
+          }) (pp `=-trans` ppp)))
+          | inr bb', pp => pmap (\lam t => \case t \with {
+            | inl a => inl a
+            | inr b => inr (sir b)
+          }) (pp `=-trans` ppp)
+        }
+      }
   }
 
 -- 4. Тип X называется инъективным, если для любой функции f : A -> X и любой инъекции i : A -> B сущесвует функция l : B -> X такая, что l `o` i = f.
@@ -125,4 +185,12 @@
 
 \func isInjective (X : \Type) => \Pi {A B : \Type} (f : A -> X) (i : A -> B) (p : isInj i) -> \Sigma (l : B -> X) (l `o` i = f)
 
-\func Prop-isInjective : isInjective \Prop => {?}
+\func Prop-isInjective : isInjective \Prop => \lam {A} {B} f i p => (\lam b => \Pi (p : \Sigma (a : A) (i a = b)) -> f p.1, helper f i p)
+  \where {
+    \func helper {A B : \Type} (f : A -> \Prop) (i : A -> B) (p : isInj i) : o (\lam b => \Pi (p : \Sigma (a : A) (i a = b)) -> f p.1) i = f
+      => funExt {A} (\lam _ => \Prop) {o (\lam b => \Pi (p : \Sigma (a : A) (i a = b)) -> f p.1) i} {f}
+                (\lam a' => propExt (\Pi (p : \Sigma (a : A) (i a = i a')) -> f p.1)
+                                    (f a')
+                                    (\lam p => p (a', idp))
+                                    (\lam t p' => repl (pmap f ((p a' p'.1) (sym p'.2))) t))
+  }
